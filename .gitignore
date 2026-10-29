@@ -1,0 +1,14 @@
+node_modules/
+android/
+ios/
+.DS_Store
+*.log
+.idea/
+.vscode/
+dist/
+www/vs/
+www/jszip.min.js
+*.apk
+.gradle/
+local.properties
+*.iml

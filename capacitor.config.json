@@ -1,0 +1,25 @@
+{
+  "appId": "com.codeforge.editor",
+  "appName": "CodeForge",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0d1117",
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "Filesystem": {
+      "android": {
+        "requestPermissions": true
+      }
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0e13"
+    }
+  }
+}
