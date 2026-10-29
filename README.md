@@ -13,6 +13,7 @@ Editor kode berbasis **Monaco Editor** (mesin yang sama dengan VS Code), tersedi
 - Gaya tampilan **Formal** (default, ala editor desktop: ikon netral, tanpa glow) atau **Cerah** (berwarna), diatur di Pengaturan
 - Tombol lipat (‹) di tepi sidebar untuk menutup Explorer ke kiri
 - Ikon SVG berwarna menyala, tombol besar mudah ditekan di HP (min 44px)
+- Ikon launcher Android CodeForge (adaptif dan resolusi density) dibuat dari logo brand
 - Multi-tab, explorer, cari di file terbuka & workspace
 - Buka file / folder / ZIP, drag & drop
 - Simpan ke Documents/CodeForge di Android (Capacitor Filesystem)

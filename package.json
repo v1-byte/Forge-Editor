@@ -1,13 +1,13 @@
 {
   "name": "codeforge",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "description": "CodeForge — Monaco code editor as web app + Android APK (Capacitor)",
   "scripts": {
     "setup": "node copy.js",
     "postinstall": "node copy.js",
-    "android": "npm run setup && node -e \"const fs=require('fs');if(!fs.existsSync('android')){require('child_process').execSync('npx cap add android',{stdio:'inherit'})}\" && npx cap sync android",
-    "sync": "npm run setup && npx cap sync android",
+    "android": "npm run setup && node -e \"const fs=require('fs');if(!fs.existsSync('android')){require('child_process').execSync('npx cap add android',{stdio:'inherit'})}\" && npx cap sync android && node copy-android-icons.js",
+    "sync": "npm run setup && npx cap sync android && node copy-android-icons.js",
     "build:apk": "npm run android && cd android && chmod +x gradlew && ./gradlew assembleDebug",
     "open:android": "npx cap open android"
   },
