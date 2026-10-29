@@ -26,6 +26,7 @@ Editor kode berbasis **Monaco Editor** (mesin yang sama dengan VS Code), tersedi
 - Menu Alat: duplikat file aktif, tutup tab lain, statistik dokumen (baris/kata/karakter/kesalahan), format dokumen, palet perintah, ekspor ZIP, dan muat ulang editor
 - Salin seluruh isi file aktif ke clipboard
 - Keyboard shortcuts + tombol cepat di mobile
+- Checker otomatis hanya untuk rilis stabil GitHub: saat aplikasi Android dibuka/dilanjutkan dan tiap 6 jam selama aktif; pengguna diberi tautan rilis dan menyetujui pemasangan lewat Android
 - Offline setelah `npm run setup` (Monaco & JSZip lokal)
 
 ## Cara pakai (Web)
@@ -41,7 +42,11 @@ Tanpa `npm install`, Monaco akan dimuat dari CDN (butuh internet).
 
 1. Upload / push folder ini ke repositori GitHub.
 2. Buka tab **Actions** → **Build APK** → **Run workflow**.
-3. Setelah selesai, unduh artifact **CodeForge-APK**.
+3. Setelah selesai, unduh artifact **CodeForge-APK-[nomor run]**.
+
+Push tag versi `v*.*.*` akan membangun dan menerbitkan `app-release.apk` dengan signing key stabil dari GitHub Actions Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Jangan commit file keystore atau memasukkan secret ke kode. Branch build biasa tetap menggunakan debug APK. Checker membandingkan versi aplikasi dengan **rilis stabil yang diterbitkan**, bukan setiap commit; Android tetap meminta pengguna menyetujui pemasangan, dan pemeriksaan tidak berjalan saat aplikasi ditutup.
+
+APK v1.5.3 dan sebelumnya memakai kunci debug yang berbeda. Untuk migrasi awal ke APK yang ditandatangani stabil, uninstall versi lama lalu pasang rilis stabil sekali. Setelah itu, rilis dengan kunci yang sama dapat dipasang di atas versi tersebut.
 
 ## Build APK manual
 
@@ -98,6 +103,7 @@ Pilih **GitHub → Fork Repositori…**, lalu masukkan URL repositori publik/pri
 ├── capacitor.config.json
 ├── package.json
 ├── copy.js                 # Salin Monaco + JSZip ke www/
+├── configure-android-signing.js # Signing release dari Actions Secrets
 ├── .github/workflows/apk.yml
 └── README.md
 ```

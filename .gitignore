@@ -9,6 +9,10 @@ dist/
 www/vs/
 www/jszip.min.js
 *.apk
+*.jks
+*.keystore
+*.p12
+*.pfx
 .gradle/
 local.properties
 *.iml

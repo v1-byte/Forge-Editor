@@ -670,6 +670,11 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
   const ws = new Map();   // path -> { size, read, handle? }
   const files = new Map(); // path -> { path, name, m, dirty, v, h }
   let ed = null, act = null, dark = true, saveTimer = null, isCap = false;
+  const APP_VERSION = '1.5.4';
+  const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+  const UPDATE_API_URL = 'https://api.github.com/repos/v1-byte/Forge-Editor/releases/latest';
+  const UPDATE_RELEASE_URL = 'https://github.com/v1-byte/Forge-Editor/releases/latest';
+  let updateCheckBusy = false;
 
   const S = Object.assign(
     { fs: 14, tab: 4, wrap: innerWidth < 800 ? 'on' : 'off', mm: innerWidth < 800 ? 0 : 1, lig: 1, autosave: 0,
@@ -787,6 +792,14 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
 
   function init() {
     detectCapacitor();
+    if (isCap) {
+      setTimeout(() => checkForUpdates(false), 4000);
+      setInterval(() => checkForUpdates(false), UPDATE_CHECK_INTERVAL);
+      addEventListener('focus', () => checkForUpdates(false));
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkForUpdates(false);
+      });
+    }
 
     const defTheme = (name, base, colors, rules) =>
       monaco.editor.defineTheme(name, { base, inherit: true, colors, rules });
@@ -1957,8 +1970,9 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
         'Alt+Klik    Multi-kursor\n' +
         'Ctrl+/      Komentar baris'
       )],
+      ['refresh', 'Periksa pembaruan', '', () => checkForUpdates(true)],
       ['info', 'Tentang', '', () => alert(
-        'CodeForge v1.5.2\n' +
+        'CodeForge v' + APP_VERSION + '\n' +
         'Editor kode berbasis Monaco Editor.\n' +
         (isCap ? 'Mode: Android (Capacitor)\n' : 'Mode: Browser\n') +
         'Simpan Android → Documents/CodeForge/'
@@ -1970,6 +1984,68 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
   function openExternal(url) {
     const w = window.open(url, '_blank');
     if (!w) location.href = url;
+  }
+
+  function compareVersions(a, b) {
+    const parse = value => {
+      const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/.exec(String(value || '').trim());
+      return m ? m.slice(1, 4).map(Number) : null;
+    };
+    const left = parse(a), right = parse(b);
+    if (!left || !right) return 0;
+    for (let i = 0; i < 3; i++) {
+      if (left[i] !== right[i]) return left[i] > right[i] ? 1 : -1;
+    }
+    return 0;
+  }
+
+  async function checkForUpdates(force) {
+    if (!isCap) {
+      if (force) toast('Pemeriksaan APK tersedia di aplikasi Android.', true);
+      return;
+    }
+    if (updateCheckBusy) return;
+    const now = Date.now();
+    const lastCheck = Number(localStorage.getItem('cf.update.checkedAt') || 0);
+    if (!force && now - lastCheck < UPDATE_CHECK_INTERVAL) return;
+    updateCheckBusy = true;
+    localStorage.setItem('cf.update.checkedAt', String(now));
+    let timeout;
+    try {
+      const controller = new AbortController();
+      timeout = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch(UPDATE_API_URL, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const release = await response.json();
+      if (release.draft || release.prerelease || !release.tag_name) return;
+      const latest = String(release.tag_name);
+      if (compareVersions(latest, APP_VERSION) <= 0) {
+        if (force) toast('CodeForge sudah menggunakan versi terbaru.');
+        return;
+      }
+      const hasReleaseApk = Array.isArray(release.assets) && release.assets.some(a => a.name === 'app-release.apk');
+      if (!hasReleaseApk) {
+        if (force) toast('Rilis terbaru belum menyediakan APK resmi.', true);
+        return;
+      }
+      if (!force && localStorage.getItem('cf.update.dismissed') === latest) return;
+      const openRelease = confirm(
+        'Pembaruan CodeForge ' + latest + ' tersedia.\n\n' +
+        'Buka halaman rilis untuk mengunduh APK? Android akan meminta konfirmasi pemasangan.'
+      );
+      localStorage.setItem('cf.update.dismissed', latest);
+      if (openRelease) openExternal(UPDATE_RELEASE_URL);
+    } catch (_) {
+      if (force) toast('Tidak dapat memeriksa pembaruan. Periksa koneksi internet.', true);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      updateCheckBusy = false;
+    }
   }
 
   function forkGitHubRepo() {
