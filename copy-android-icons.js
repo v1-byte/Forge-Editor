@@ -25,4 +25,18 @@ function copyTree(from, to) {
 }
 
 copyTree(src, dest);
-console.log('Ikon launcher CodeForge berhasil dipasang ke Android resources.');
+
+const pkg = require(path.join(root, 'package.json'));
+const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(pkg.version);
+if (!match) {
+  console.error('Versi package.json harus berformat MAJOR.MINOR.PATCH.');
+  process.exit(1);
+}
+const versionCode = Number(match[1]) * 10000 + Number(match[2]) * 100 + Number(match[3]);
+const gradleFile = path.join(root, 'android', 'app', 'build.gradle');
+let gradle = fs.readFileSync(gradleFile, 'utf8');
+gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
+gradle = gradle.replace(/versionName\s+['"][^'"]+['"]/, `versionName "${pkg.version}"`);
+fs.writeFileSync(gradleFile, gradle);
+
+console.log(`Ikon launcher terpasang; APK Android disetel ke versi ${pkg.version} (${versionCode}).`);
