@@ -16,6 +16,7 @@ Editor kode berbasis **Monaco Editor** (mesin yang sama dengan VS Code), tersedi
 - Ikon launcher Android CodeForge (adaptif dan resolusi density) dibuat dari logo brand
 - Multi-tab, explorer, cari di file terbuka & workspace
 - Buka file / folder / ZIP, drag & drop
+- GGUF metadata viewer untuk file `.gguf`: menampilkan metadata dan hingga 100 info tensor pertama; hanya membaca 20 MiB awal, bukan seluruh bobot model. Parser dimuat dari CDN saat viewer digunakan (perlu internet).
 - Simpan ke Documents/CodeForge di Android (Capacitor Filesystem)
 - Ekspor workspace ke ZIP
 - Tema gelap / terang, minimap, word wrap, ligature
@@ -69,6 +70,7 @@ npm run open:android
 - **Buka Folder** bergantung pada WebView; jika tidak muncul, gunakan **Buka ZIP** atau **Buka File**.
 - **Simpan** menulis ke `Documents/CodeForge/...` (plugin Filesystem).
 - File biner akan diminta konfirmasi sebelum dibuka sebagai teks.
+- File `.gguf` dibuka di metadata viewer khusus; konten biner tidak dimasukkan ke Monaco atau disalin ke Documents.
 - Folder `node_modules`, `.git`, `build`, `dist` diabaikan saat buka folder/ZIP.
 
 ## Menu GitHub
