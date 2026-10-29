@@ -6,6 +6,13 @@
 <meta name="theme-color" content="#0a0e13">
 <meta name="description" content="CodeForge — editor kode Monaco untuk web & Android">
 <title>CodeForge</title>
+<script type="importmap">
+{
+  "imports": {
+    "@huggingface/gguf": "https://cdn.jsdelivr.net/npm/@huggingface/gguf@0.2.1/+esm"
+  }
+}
+</script>
 <link rel="icon" type="image/png" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
 <style>
@@ -490,6 +497,23 @@ body.fm #sc{border-radius:0 6px 6px 0;box-shadow:2px 0 8px #0004}
 .lg::after{display:none}
 body.fm #top b.logo .mark{background:#000;border-radius:5px;box-shadow:0 0 0 1px #ffffff1f}
 body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 12px 32px #0006}
+#gguf-viewer{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:#000b;padding:16px}
+#gguf-viewer[hidden]{display:none}
+.gguf-wrap{width:min(100%,1000px);max-height:100%;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--bd);border-radius:14px;box-shadow:0 24px 80px #0009;overflow:hidden}
+.gguf-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--bd);background:var(--sd)}
+.gguf-title{min-width:0;flex:1}.gguf-title small{color:var(--ac);font-size:10px;font-weight:700;letter-spacing:.12em}
+.gguf-title h2{margin:3px 0 2px;font-size:17px;overflow-wrap:anywhere}.gguf-title p{margin:0;color:var(--mu);font-size:12px;overflow-wrap:anywhere}
+.gguf-head button{width:42px;height:42px;font-size:22px;color:var(--mu)}
+.gguf-body{overflow:auto;padding:16px;display:grid;gap:14px;min-height:0}
+.gguf-status{padding:10px 12px;border-radius:8px;background:var(--hv);color:var(--mu);line-height:1.5}
+.gguf-status.error{color:var(--er)}
+.gguf-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.gguf-card,.gguf-section{background:var(--sd);border:1px solid var(--bd);border-radius:9px;padding:12px;min-width:0}
+.gguf-card small{display:block;color:var(--mu);font-size:11px;margin-bottom:5px}
+.gguf-card b{display:block;overflow-wrap:anywhere;font-size:14px}
+.gguf-section h3{margin:0 0 10px;font-size:14px;color:var(--a2)}
+.gguf-section pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:38vh;overflow:auto;padding:10px;border-radius:6px;background:var(--bg);font:12px/1.5 ui-monospace,Consolas,monospace}
+@media(max-width:600px){#gguf-viewer{padding:8px}.gguf-wrap{border-radius:10px}.gguf-head{padding:10px}.gguf-body{padding:10px}.gguf-section pre{max-height:32vh}}
 </style>
 </head>
 <body>
@@ -614,6 +638,20 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     <button class="tb" id="pvo" title="Buka di tab baru" aria-label="Buka di tab baru"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span></button>
   </div>
   <div class="pvb"><iframe id="pvf" title="Preview" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe></div>
+</div>
+<div id="gguf-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="gguf-name">
+  <div class="gguf-wrap">
+    <div class="gguf-head">
+      <div class="gguf-title"><small>GGUF METADATA VIEWER</small><h2 id="gguf-name">File GGUF</h2><p id="gguf-path"></p></div>
+      <button id="gguf-close" title="Tutup viewer" aria-label="Tutup viewer">×</button>
+    </div>
+    <div class="gguf-body">
+      <div id="gguf-status" class="gguf-status" role="status">Menyiapkan viewer…</div>
+      <div id="gguf-summary" class="gguf-cards"></div>
+      <section class="gguf-section"><h3>Metadata</h3><pre id="gguf-metadata"></pre></section>
+      <section class="gguf-section"><h3 id="gguf-tensor-title">Informasi tensor</h3><pre id="gguf-tensors"></pre></section>
+    </div>
+  </div>
 </div>
 <button id="sc" title="Lipat sidebar ke kiri" aria-label="Lipat sidebar ke kiri"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span></button>
 <div id="menu"></div>
@@ -1043,12 +1081,85 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     ws.set(path, entry);
   }
 
+  async function handleGgufFile(file, path) {
+    const viewer = $('gguf-viewer');
+    const status = $('gguf-status');
+    $('gguf-name').textContent = file.name || path.split('/').pop();
+    $('gguf-path').textContent = path;
+    $('gguf-summary').replaceChildren();
+    $('gguf-metadata').textContent = '';
+    $('gguf-tensors').textContent = '';
+    $('gguf-tensor-title').textContent = 'Informasi tensor';
+    status.className = 'gguf-status';
+    status.textContent = 'Membaca maksimal 20 MiB bagian awal file; data tensor tidak dibaca.';
+    viewer.hidden = false;
+    loading(true, 'Membaca header GGUF…');
+    try {
+      const header = await file.slice(0, 20 * 1024 * 1024).arrayBuffer();
+      const magic = new TextDecoder().decode(header.slice(0, 4));
+      if (magic !== 'GGUF') throw new Error('Magic header bukan GGUF; file mungkin rusak atau bukan GGUF.');
+      const ggufVersion = new DataView(header).getUint32(4, true);
+      const { gguf } = await import('@huggingface/gguf');
+      const result = await gguf(header);
+      const metadata = result && result.metadata ? result.metadata : {};
+      const tensorInfos = Array.isArray(result && result.tensorInfos) ? result.tensorInfos : [];
+      const architecture = metadata['general.architecture'] || '-';
+      const quantMatch = (file.name || path).match(/Q\d+_[A-Z0-9]+/i);
+      const quantization = quantMatch ? quantMatch[0].toUpperCase() : (metadata['general.file_type'] ?? '-');
+      const modelName = metadata['general.name'] || file.name;
+      const cards = [
+        ['Ukuran file', fmt(file.size)],
+        ['Magic', magic],
+        ['Versi GGUF', String(ggufVersion)],
+        ['Arsitektur', String(architecture)],
+        ['Quantization', String(quantization)],
+        ['Jumlah tensor', tensorInfos.length.toLocaleString()]
+      ];
+      cards.forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'gguf-card';
+        const small = document.createElement('small');
+        small.textContent = label;
+        const bold = document.createElement('b');
+        bold.textContent = value;
+        card.append(small, bold);
+        $('gguf-summary').appendChild(card);
+      });
+      $('gguf-name').textContent = String(modelName);
+      const json = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? item.toString() : item, 2) || '{}';
+      const metadataText = json(metadata);
+      const metadataLimit = 1024 * 1024;
+      $('gguf-metadata').textContent = metadataText.length > metadataLimit
+        ? metadataText.slice(0, metadataLimit) + '\n… metadata dipotong pada 1 MiB agar viewer tetap ringan.'
+        : metadataText;
+      $('gguf-tensor-title').textContent = 'Informasi tensor (' + tensorInfos.length.toLocaleString() + ')';
+      $('gguf-tensors').textContent = json(tensorInfos.slice(0, 100)) +
+        (tensorInfos.length > 100 ? '\n\n… hanya 100 tensor pertama yang ditampilkan.' : '');
+      status.textContent = 'Berhasil membaca metadata ' + String(modelName) + '. File biner tidak dibuka di editor dan tidak disalin ke Documents.';
+    } catch (e) {
+      status.className = 'gguf-status error';
+      status.textContent = 'Gagal membaca metadata GGUF: ' + (e && e.message ? e.message : String(e)) +
+        '. Viewer hanya memproses 20 MiB pertama dan memerlukan koneksi internet untuk memuat parser.';
+    } finally {
+      loading(false);
+    }
+  }
+
+  function closeGgufViewer() {
+    $('gguf-viewer').hidden = true;
+  }
+
   async function openP(path) {
     if (!ed) return toast('Editor masih memuat…');
-    if (files.has(path)) return show(path);
-
     const entry = ws.get(path);
     if (!entry) return toast('File tidak ditemukan: ' + path, true);
+    if (/\.gguf$/i.test(path)) {
+      let file = entry.file || null;
+      if (!file && entry.handle && entry.handle.getFile) file = await entry.handle.getFile();
+      if (!file) return toast('Pilih file .gguf langsung; file GGUF di dalam ZIP belum didukung.', true);
+      return handleGgufFile(file, path);
+    }
+    if (files.has(path)) return show(path);
 
     loading(true, 'Membaca ' + path.split('/').pop() + '…');
     try {
@@ -1312,7 +1423,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     for (const f of list) {
       const p = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
       if (SKIP.test(p)) continue;
-      addWs(p, { size: f.size, read: () => f.text() });
+      addWs(p, { size: f.size, file: f, read: () => f.text() });
       n++;
       if (openFirst && n === 1 && list.length === 1) await openP(p);
     }
@@ -1326,7 +1437,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
         const handles = await showOpenFilePicker({ multiple: true });
         for (const h of handles) {
           const f = await h.getFile();
-          addWs(f.name, { size: f.size, read: () => f.text(), handle: h });
+          addWs(f.name, { size: f.size, file: f, read: () => f.text(), handle: h });
           await openP(f.name);
         }
         tree();
@@ -1384,7 +1495,9 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     try {
       await ensureJSZip();
       const z = new JSZip();
+      let skippedGguf = 0;
       for (const [p, e] of ws) {
+        if (/\.gguf$/i.test(p)) { skippedGguf++; continue; }
         const content = files.has(p) ? files.get(p).m.getValue() : await e.read();
         z.file(p, content);
       }
@@ -1394,7 +1507,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
       a.download = 'workspace.zip';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      toast('ZIP diunduh');
+      toast(skippedGguf ? 'ZIP diunduh; ' + skippedGguf + ' file GGUF dilewati agar tidak dimuat ke memori.' : 'ZIP diunduh');
     } catch (e) {
       toast('Gagal ekspor: ' + (e.message || e), true);
     } finally {
@@ -1407,7 +1520,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
   const canPv = n => PV_RE.test(n);
   let pvDoc = '';
 
-  const readP = p => files.has(p) ? files.get(p).m.getValue() : (ws.has(p) ? ws.get(p).read() : null);
+  const readP = p => /\.gguf$/i.test(p) ? null : (files.has(p) ? files.get(p).m.getValue() : (ws.has(p) ? ws.get(p).read() : null));
 
   function rel(base, ref) {
     if (/^(https?:|data:|blob:|\/\/|#)/i.test(ref)) return null;
@@ -1683,6 +1796,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
       try {
         for (const [p, e] of ws) {
           if (count >= limit) break;
+          if (/\.gguf$/i.test(p)) continue;
           let text;
           if (files.has(p)) text = files.get(p).m.getValue();
           else {
@@ -1921,6 +2035,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
   $('qt').onclick = theme;
   $('qv').onclick = $('fab').onclick = () => openPv();
   $('pvx').onclick = () => closePv();
+  $('gguf-close').onclick = closeGgufViewer;
   $('pvr').onclick = () => renderPv();
   $('pvo').onclick = () => {
     try { window.open(URL.createObjectURL(new Blob([pvDoc], { type: 'text/html' })), '_blank'); }
@@ -1996,7 +2111,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
       return new Promise(r => {
         entry.file(f => {
           if (!SKIP.test(base + entry.name)) {
-            addWs(base + entry.name, { size: f.size, read: () => f.text() });
+            addWs(base + entry.name, { size: f.size, file: f, read: () => f.text() });
           }
           r();
         });
@@ -2053,6 +2168,7 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
   // Keyboard: Escape closes menu / side on mobile
   addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!$('gguf-viewer').hidden) closeGgufViewer();
       if (!$('pv').hidden) closePv();
       $('menu').style.display = 'none';
       if (innerWidth < 800) $('side').classList.remove('open');
