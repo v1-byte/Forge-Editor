@@ -1,6 +1,6 @@
 {
   "name": "codeforge",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "description": "CodeForge — Monaco code editor as web app + Android APK (Capacitor)",
   "scripts": {

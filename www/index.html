@@ -1009,7 +1009,7 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
     arrr: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
     tabk: '<line x1="3" y1="12" x2="16" y2="12"/><polyline points="11 7 16 12 11 17"/><line x1="21" y1="5" x2="21" y2="19"/>'
   });
-  const VER = '2.0.1';
+  const VER = '2.0.2';
   const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
   const UPDATE_API_URL = 'https://api.github.com/repos/v1-byte/Forge-Editor/releases/latest';
   const UPDATE_RELEASE_URL = 'https://github.com/v1-byte/Forge-Editor/releases/latest';
@@ -4594,35 +4594,44 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
     const whole = $('sw').checked;
     let count = 0;
     const limit = 400;
+    const query = q.toLowerCase();
+    const addFileHit = (p, label, preview, offset = null) => {
+      if (count >= limit) return;
+      count++;
+      const d = document.createElement('div');
+      d.className = 'hit';
+      d.innerHTML = '<small></small><br><span></span>';
+      d.firstChild.textContent = label;
+      d.lastChild.textContent = preview || p;
+      d.onclick = async () => {
+        if (offset !== null && BinCore.isBinaryBytes(await (await srcOf(p)).read(0, Math.min(8192, ws.get(p)?.size || 8192)))) {
+          await openBin(p, offset);
+        } else {
+          await openP(p);
+        }
+      };
+      r.appendChild(d);
+    };
+
+    // Nama file selalu dicari, termasuk .gguf, .safetensors, .bin, .pt,
+    // .pth, .onnx, dan ekstensi model lain yang tidak boleh disaring.
+    for (const p of [...ws.keys()].sort()) {
+      if (p.toLowerCase().includes(query)) addFileHit(p, p, 'Nama file cocok');
+      if (count >= limit) break;
+    }
 
     if (whole) {
       loading(true, 'Mencari di workspace…');
       try {
         for (const [p, e] of ws) {
           if (count >= limit) break;
-          let text;
-          if (files.has(p)) text = files.get(p).m.getValue();
-          else {
-            try { text = await e.read(); } catch (_) { continue; }
-          }
-          const lines = text.split(/\r?\n/);
-          for (let i = 0; i < lines.length && count < limit; i++) {
-            if (lines[i].toLowerCase().includes(q.toLowerCase())) {
-              count++;
-              const d = document.createElement('div');
-              d.className = 'hit';
-              d.innerHTML = '<small></small><br><span></span>';
-              d.firstChild.textContent = p + ':' + (i + 1);
-              d.lastChild.textContent = lines[i].trim().slice(0, 90);
-              d.onclick = async () => {
-                if (!files.has(p)) await openP(p);
-                else show(p);
-                ed.setPosition({ lineNumber: i + 1, column: 1 });
-                ed.revealLineInCenter(i + 1);
-              };
-              r.appendChild(d);
-            }
-          }
+          let src;
+          try { src = await srcOf(p); } catch (_) { continue; }
+          const hits = await BinCore.findAll(src, new TextEncoder().encode(q), {
+            max: limit - count,
+            onProgress: (done, total) => { if (total > 16 << 20) $('sr').dataset.progress = `${Math.round(done / total * 100)}%`; }
+          });
+          for (const off of hits) addFileHit(p, `${p} @ 0x${off.toString(16)}`, 'Kecocokan isi file', off);
         }
       } finally {
         loading(false);
@@ -5005,6 +5014,7 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
   ].concat(canPv(q) ? [0, ['play', 'Preview', 'F5', () => { show(q); openPv(); }]] : []);
   const fileCtx = q => [
     ['file', 'Buka', '', () => openP(q)],
+    ['code', 'Buka sebagai teks', '', () => openP(q, { forceText: true })],
     0,
     ['edit', 'Ganti Nama', '', () => doRename(q, false)],
     ['layers', 'Duplikat', '', () => doDup(q, false)],
