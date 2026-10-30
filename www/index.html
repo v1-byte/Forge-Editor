@@ -1009,10 +1009,9 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
     arrr: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
     tabk: '<line x1="3" y1="12" x2="16" y2="12"/><polyline points="11 7 16 12 11 17"/><line x1="21" y1="5" x2="21" y2="19"/>'
   });
-  const VER = '2.0.2';
+  const VER = '2.1.0';
   const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
   const UPDATE_API_URL = 'https://api.github.com/repos/v1-byte/Forge-Editor/releases/latest';
-  const UPDATE_RELEASE_URL = 'https://github.com/v1-byte/Forge-Editor/releases/latest';
   const ws = new Map();   // path -> { size, read, handle? }
   const files = new Map(); // path -> { path, name, m, dirty, v, h }
   const dirs = new Set();  // folder eksplisit (termasuk yang kosong)
@@ -4857,10 +4856,6 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
   };
   const MC = { File: 1, Edit: 2, Select: 6, View: 3, Go: 4, Run: 4, Help: 5 };
 
-  function openExternal(url) {
-    const w = window.open(url, '_blank');
-    if (!w) location.href = url;
-  }
   function compareVersions(a, b) {
     const parse = value => {
       const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/.exec(String(value || '').trim());
@@ -4901,18 +4896,35 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
         if (force) toast('CodeForge sudah menggunakan versi terbaru.');
         return;
       }
-      const hasReleaseApk = Array.isArray(release.assets) && release.assets.some(a => /\.apk$/i.test(String(a.name || '')));
-      if (!hasReleaseApk) {
+      const apk = Array.isArray(release.assets)
+        ? release.assets.find(a => /\.apk$/i.test(String(a.name || '')) && a.browser_download_url)
+        : null;
+      if (!apk) {
         if (force) toast('Rilis terbaru belum menyediakan APK resmi.', true);
         return;
       }
       if (!force && localStorage.getItem('cf.update.dismissed') === latest) return;
-      const openReleasePage = confirm(
+      const download = confirm(
         'Pembaruan CodeForge ' + latest + ' tersedia.\n\n' +
-        'Buka halaman rilis untuk mengunduh APK? Android akan meminta konfirmasi pemasangan.'
+        'Unduh APK sekarang? Setelah selesai, Android akan membuka installer sistem.'
       );
+      if (!download) return;
+      const native = NF();
+      if (!native || !native.downloadAndInstall) {
+        if (force) toast('Updater native belum tersedia. Pasang ulang APK terbaru.', true);
+        return;
+      }
+      toast('Mengunduh APK ' + latest + '…');
+      const result = await native.downloadAndInstall({
+        url: apk.browser_download_url,
+        fileName: apk.name
+      });
       localStorage.setItem('cf.update.dismissed', latest);
-      if (openReleasePage) openExternal(UPDATE_RELEASE_URL);
+      if (result && result.needsPermission) {
+        toast('Izinkan pemasangan dari sumber ini, lalu pilih Periksa Pembaruan lagi.');
+      } else if (result && result.started) {
+        toast('Installer Android dibuka. Konfirmasi pemasangan di layar sistem.');
+      }
     } catch (_) {
       if (force) toast('Tidak dapat memeriksa pembaruan. Periksa koneksi internet.', true);
     } finally {

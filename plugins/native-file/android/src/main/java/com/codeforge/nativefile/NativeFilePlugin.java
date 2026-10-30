@@ -4,11 +4,14 @@ import android.app.Activity;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Base64;
 
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,28 +20,32 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * NativeFile — akses berkas native untuk CodeForge.
+ * NativeFile — akses berkas native dan installer APK CodeForge.
  *
- *  stat({ uri })                       -> { size }
- *  read({ uri, offset, length })       -> { data (base64), bytes }   maks 4 MB per panggilan
- *  pick()                              -> { uri, name, size } | { cancelled: true }
- *
- * uri bisa berupa:
- *  - content://...  (hasil pick, lewat Storage Access Framework)
- *  - file:///...    (lokasi app, mis. hasil Filesystem.getUri)
- *  - /path/absolut
+ * stat({ uri })                       -> { size }
+ * read({ uri, offset, length })       -> { data (base64), bytes }   maks 4 MB per panggilan
+ * pick()                              -> { uri, name, size } | { cancelled: true }
+ * downloadAndInstall({ url, fileName }) -> unduh APK GitHub lalu buka Package Installer Android
  */
 @CapacitorPlugin(name = "NativeFile")
 public class NativeFilePlugin extends Plugin {
 
     private static final int MAX_CHUNK = 4 * 1024 * 1024;
+    private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
 
     private interface Op<T> {
         T run(FileChannel ch, long size) throws Exception;
@@ -142,6 +149,102 @@ public class NativeFilePlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /**
+     * Mengunduh APK dari release resmi lalu membuka Android Package Installer.
+     * URL dibatasi ke GitHub agar plugin tidak menjadi downloader arbitrer.
+     */
+    @PluginMethod
+    public void downloadAndInstall(PluginCall call) {
+        String urlText = call.getString("url");
+        String requestedName = call.getString("fileName", "CodeForge-update.apk");
+        if (urlText == null || urlText.trim().isEmpty()) {
+            call.reject("url wajib diisi");
+            return;
+        }
+        try {
+            URI parsed = URI.create(urlText);
+            String host = parsed.getHost() == null ? "" : parsed.getHost().toLowerCase();
+            if (!"https".equalsIgnoreCase(parsed.getScheme()) ||
+                    !("github.com".equals(host) || "objects.githubusercontent.com".equals(host))) {
+                call.reject("URL update harus berasal dari GitHub melalui HTTPS");
+                return;
+            }
+        } catch (Exception e) {
+            call.reject("URL update tidak valid", e);
+            return;
+        }
+        final String fileName = safeApkName(requestedName);
+        downloadExecutor.execute(() -> {
+            try {
+                File updates = new File(getContext().getCacheDir(), "updates");
+                if (!updates.exists() && !updates.mkdirs()) throw new IllegalStateException("Folder update tidak bisa dibuat");
+                File apk = new File(updates, fileName);
+                if (apk.exists() && !apk.delete()) throw new IllegalStateException("APK lama tidak bisa diganti");
+                downloadFile(urlText, apk);
+                openInstaller(apk, call);
+            } catch (Exception e) {
+                call.reject("Download update gagal: " + (e.getMessage() == null ? e.toString() : e.getMessage()), e);
+            }
+        });
+    }
+
+    private String safeApkName(String name) {
+        String n = name == null ? "CodeForge-update.apk" : name.replaceAll("[^A-Za-z0-9._-]", "_");
+        if (!n.toLowerCase().endsWith(".apk")) n += ".apk";
+        return n;
+    }
+
+    private void downloadFile(String urlText, File out) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(urlText).openConnection();
+        c.setInstanceFollowRedirects(true);
+        c.setConnectTimeout(30000);
+        c.setReadTimeout(30000);
+        c.setRequestProperty("User-Agent", "CodeForge-Android-Updater/2");
+        c.setRequestProperty("Accept", "application/vnd.android.package-archive");
+        try {
+            int status = c.getResponseCode();
+            if (status < 200 || status >= 300) throw new IllegalStateException("HTTP " + status);
+            try (BufferedInputStream in = new BufferedInputStream(c.getInputStream());
+                 FileOutputStream os = new FileOutputStream(out)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) != -1) os.write(buf, 0, n);
+            }
+            if (!out.isFile() || out.length() == 0) throw new IllegalStateException("APK kosong");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private void openInstaller(File apk, PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                        !getContext().getPackageManager().canRequestPackageInstalls()) {
+                    Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + getContext().getPackageName()));
+                    getActivity().startActivity(settings);
+                    JSObject ret = new JSObject();
+                    ret.put("started", false);
+                    ret.put("needsPermission", true);
+                    call.resolve(ret);
+                    return;
+                }
+                String authority = getContext().getPackageName() + ".nativefile.provider";
+                Uri uri = FileProvider.getUriForFile(getContext(), authority, apk);
+                Intent install = new Intent(Intent.ACTION_VIEW);
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                getActivity().startActivity(install);
+                JSObject ret = new JSObject();
+                ret.put("started", true);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Installer Android tidak bisa dibuka: " + e.getMessage(), e);
+            }
+        });
+    }
+
     private String displayName(Uri uri) {
         try (Cursor c = getContext().getContentResolver().query(uri, null, null, null, null)) {
             if (c != null && c.moveToFirst()) {
@@ -160,6 +263,6 @@ public class NativeFilePlugin extends Plugin {
                 if (i >= 0 && !c.isNull(i)) return c.getLong(i);
             }
         } catch (Exception ignored) { }
-        return -1L; // tidak diketahui; front-end memanggil stat()
+        return -1L;
     }
 }
