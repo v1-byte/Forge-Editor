@@ -1,6 +1,6 @@
 node_modules/
-android/
-ios/
+/android/
+/ios/
 .DS_Store
 *.log
 .idea/
