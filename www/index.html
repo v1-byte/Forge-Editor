@@ -1162,6 +1162,75 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     $('gguf-viewer').hidden = true;
   }
 
+  const TXT_FULL_LIMITS = {
+    sampleBytes: 8192,
+    chunkBytes: 64 * 1024,
+    maxBinaryBytes: 1024 * 1024,
+    confirmLargeBytes: 20 * 1024 * 1024
+  };
+
+  async function isBinaryFile(file) {
+    const sample = new Uint8Array(await file.slice(0, TXT_FULL_LIMITS.sampleBytes).arrayBuffer());
+    if (!sample.length) return false;
+    let controls = 0;
+    for (const byte of sample) {
+      if (byte === 0) return true;
+      if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 12 && byte !== 13) controls++;
+    }
+    if (controls / sample.length > 0.02) return true;
+
+    // Accept a partial UTF-8 sequence at the sample boundary, but reject invalid data inside it.
+    for (let trim = 0; trim <= Math.min(3, sample.length - 1); trim++) {
+      try {
+        new TextDecoder('utf-8', { fatal: true }).decode(sample.subarray(0, sample.length - trim));
+        return false;
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  function hexDump(bytes, baseOffset) {
+    const lines = [];
+    for (let i = 0; i < bytes.length; i += 16) {
+      const part = bytes.subarray(i, i + 16);
+      const hex = Array.from(part, byte => byte.toString(16).padStart(2, '0')).join(' ');
+      const ascii = Array.from(part, byte => byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.').join('');
+      lines.push((baseOffset + i).toString(16).padStart(8, '0') + '  ' + hex.padEnd(47, ' ') + '  |' + ascii + '|');
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  async function binaryTextPreview(file, sourcePath) {
+    const safeName = String(file.name || sourcePath.split('/').pop()).replace(/[\r\n\t]/g, ' ').slice(0, 240);
+    const safePath = String(sourcePath).replace(/[\r\n\t]/g, ' ').slice(0, 500);
+    const sourceBytes = Math.min(file.size, TXT_FULL_LIMITS.maxBinaryBytes);
+    const lines = [
+      '// === TXT LENGKAP / HEX PREVIEW ===',
+      '// File: ' + safeName,
+      '// Ukuran: ' + fmt(file.size),
+      '// Path sumber: ' + safePath,
+      '// Hanya preview; file asli tidak akan ditimpa.',
+      '// === START FILE ===',
+      ''
+    ];
+
+    for (let offset = 0; offset < sourceBytes;) {
+      const buffer = new Uint8Array(await file.slice(offset, Math.min(offset + TXT_FULL_LIMITS.chunkBytes, sourceBytes)).arrayBuffer());
+      if (!buffer.length) break;
+      lines.push(hexDump(buffer, offset));
+      offset += buffer.length;
+      if (offset % (512 * 1024) < buffer.length) {
+        loading(true, 'Membaca hex ' + Math.floor(offset / sourceBytes * 100) + '%…');
+      }
+    }
+
+    if (file.size > sourceBytes) {
+      lines.push('', '[Preview dibatasi pada ' + fmt(sourceBytes) + ' dari ' + fmt(file.size) + ' agar aplikasi tetap responsif.]');
+    }
+    lines.push('', '// === END OF HEX PREVIEW ===');
+    return lines.join('\n');
+  }
+
   async function openP(path) {
     if (!ed) return toast('Editor masih memuat…');
     const entry = ws.get(path);
@@ -1174,11 +1243,38 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
     }
     if (files.has(path)) return show(path);
 
-    loading(true, 'Membaca ' + path.split('/').pop() + '…');
+    let sourceFile = entry.file || null;
+    let binaryFile = false;
     try {
-      const text = await entry.read();
+      if (!sourceFile && entry.handle && entry.handle.getFile) sourceFile = await entry.handle.getFile();
+      binaryFile = sourceFile ? await isBinaryFile(sourceFile) : false;
+    } catch (e) {
+      return toast('Gagal memeriksa file: ' + (e.message || e), true);
+    }
+    let openPath = path;
+    let text;
+    let isHexPreview = false;
+    if (binaryFile) {
+      const sizeLabel = fmt(sourceFile.size);
+      if (sourceFile.size > TXT_FULL_LIMITS.confirmLargeBytes && !confirm(
+        'File tampak biner: ' + sourceFile.name + ' (' + sizeLabel + ').\n\n' +
+        'Buka preview hex? Untuk menjaga aplikasi tetap responsif, maksimal ' +
+        fmt(TXT_FULL_LIMITS.maxBinaryBytes) + ' awal yang akan ditampilkan.'
+      )) return;
+      openPath = path + '.hex.txt';
+      if (files.has(openPath)) return show(openPath);
+      isHexPreview = true;
+    }
+
+    loading(true, isHexPreview ? 'Menyiapkan preview hex…' : 'Membaca ' + path.split('/').pop() + '…');
+    try {
+      if (isHexPreview) {
+        text = await binaryTextPreview(sourceFile, path);
+      } else {
+        text = await entry.read();
+      }
       const sample = text.slice(0, 8000);
-      if (sample.includes('\0')) {
+      if (!isHexPreview && sample.includes('\0')) {
         if (!confirm('File tampak biner. Tetap buka sebagai teks?')) {
           loading(false);
           return;
@@ -1186,26 +1282,26 @@ body.fm .lg{background:#000;border-radius:22px;box-shadow:0 0 0 1px #ffffff1a,0 
       }
       const model = monaco.editor.createModel(
         text,
-        undefined,
-        monaco.Uri.parse('file:///' + encodeURIComponent(path).replace(/%2F/g, '/'))
+        isHexPreview ? 'plaintext' : undefined,
+        monaco.Uri.parse('file:///' + encodeURIComponent(openPath).replace(/%2F/g, '/'))
       );
       model.updateOptions({ tabSize: +S.tab });
 
       const f = {
-        path,
-        name: path.split('/').pop(),
+        path: openPath,
+        name: openPath.split('/').pop(),
         m: model,
         dirty: false,
         v: model.getAlternativeVersionId(),
-        h: entry.handle || null
+        h: isHexPreview ? null : entry.handle || null
       };
       model.onDidChangeContent(() => {
         f.dirty = model.getAlternativeVersionId() !== f.v;
         tabs();
         updateStatus();
       });
-      files.set(path, f);
-      show(path);
+      files.set(openPath, f);
+      show(openPath);
     } catch (e) {
       toast('Gagal membuka: ' + (e.message || e), true);
     } finally {
