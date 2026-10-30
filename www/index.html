@@ -1009,7 +1009,10 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
     arrr: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
     tabk: '<line x1="3" y1="12" x2="16" y2="12"/><polyline points="11 7 16 12 11 17"/><line x1="21" y1="5" x2="21" y2="19"/>'
   });
-  const VER = '2.0.0';
+  const VER = '2.0.1';
+  const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+  const UPDATE_API_URL = 'https://api.github.com/repos/v1-byte/Forge-Editor/releases/latest';
+  const UPDATE_RELEASE_URL = 'https://github.com/v1-byte/Forge-Editor/releases/latest';
   const ws = new Map();   // path -> { size, read, handle? }
   const files = new Map(); // path -> { path, name, m, dirty, v, h }
   const dirs = new Set();  // folder eksplisit (termasuk yang kosong)
@@ -1017,6 +1020,7 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
   const FS_DIR = 'DOCUMENTS', FS_ROOT = 'CodeForge'; // lokasi simpan Android: Documents/CodeForge
   const fsp = p => p ? FS_ROOT + '/' + p : FS_ROOT;
   let ed = null, act = null, dark = true, saveTimer = null, isCap = false;
+  let updateCheckBusy = false;
 
   const S = Object.assign(
     { fs: 14, tab: 4, wrap: innerWidth < 800 ? 'on' : 'off', mm: innerWidth < 800 ? 0 : 1, lig: 1, ln: 1, ws: 0, autosave: 0,
@@ -1144,6 +1148,14 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
 
   function init() {
     detectCapacitor();
+    if (isCap) {
+      setTimeout(() => checkForUpdates(false), 4000);
+      setInterval(() => checkForUpdates(false), UPDATE_CHECK_INTERVAL);
+      addEventListener('focus', () => checkForUpdates(false));
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkForUpdates(false);
+      });
+    }
     if (getFS()) setTimeout(() => scanNative(true), 400);   // Android: tampilkan isi Documents/CodeForge
 
     const defTheme = (name, base, colors, rules) =>
@@ -4830,10 +4842,75 @@ body.ds #st,body.fm #st{background:linear-gradient(90deg,var(--ac),var(--a2));co
       ['terminal', 'Palet Perintah', 'F1', () => run('editor.action.quickCommand')],
       ['book', 'Dokumentasi Monaco', '', () => { try { window.open('https://microsoft.github.io/monaco-editor/docs.html', '_blank'); } catch (_) {} }],
       0,
+      ['refresh', 'Periksa Pembaruan', '', () => checkForUpdates(true)],
       ['info', 'Tentang CodeForge', '', showAbout]
     ]
   };
   const MC = { File: 1, Edit: 2, Select: 6, View: 3, Go: 4, Run: 4, Help: 5 };
+
+  function openExternal(url) {
+    const w = window.open(url, '_blank');
+    if (!w) location.href = url;
+  }
+  function compareVersions(a, b) {
+    const parse = value => {
+      const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/.exec(String(value || '').trim());
+      return m ? m.slice(1, 4).map(Number) : null;
+    };
+    const left = parse(a), right = parse(b);
+    if (!left || !right) return 0;
+    for (let i = 0; i < 3; i++) {
+      if (left[i] !== right[i]) return left[i] > right[i] ? 1 : -1;
+    }
+    return 0;
+  }
+  async function checkForUpdates(force) {
+    if (!isCap) {
+      if (force) toast('Pemeriksaan APK tersedia di aplikasi Android.', true);
+      return;
+    }
+    if (updateCheckBusy) return;
+    const now = Date.now();
+    const lastCheck = Number(localStorage.getItem('cf.update.checkedAt') || 0);
+    if (!force && now - lastCheck < UPDATE_CHECK_INTERVAL) return;
+    updateCheckBusy = true;
+    localStorage.setItem('cf.update.checkedAt', String(now));
+    let timeout;
+    try {
+      const controller = new AbortController();
+      timeout = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch(UPDATE_API_URL, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const release = await response.json();
+      if (release.draft || release.prerelease || !release.tag_name) return;
+      const latest = String(release.tag_name);
+      if (compareVersions(latest, VER) <= 0) {
+        if (force) toast('CodeForge sudah menggunakan versi terbaru.');
+        return;
+      }
+      const hasReleaseApk = Array.isArray(release.assets) && release.assets.some(a => /\.apk$/i.test(String(a.name || '')));
+      if (!hasReleaseApk) {
+        if (force) toast('Rilis terbaru belum menyediakan APK resmi.', true);
+        return;
+      }
+      if (!force && localStorage.getItem('cf.update.dismissed') === latest) return;
+      const openReleasePage = confirm(
+        'Pembaruan CodeForge ' + latest + ' tersedia.\n\n' +
+        'Buka halaman rilis untuk mengunduh APK? Android akan meminta konfirmasi pemasangan.'
+      );
+      localStorage.setItem('cf.update.dismissed', latest);
+      if (openReleasePage) openExternal(UPDATE_RELEASE_URL);
+    } catch (_) {
+      if (force) toast('Tidak dapat memeriksa pembaruan. Periksa koneksi internet.', true);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      updateCheckBusy = false;
+    }
+  }
 
   // item: [ikon, label, pintasan, fungsi] atau 0 (pemisah)
   function closeMenu() {
