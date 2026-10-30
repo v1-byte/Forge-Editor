@@ -1,19 +1,32 @@
 name: Build APK
 
+# - push ke main/master            -> APK debug
+# - push tag v*  (mis. v1.9.0)     -> APK rilis bertanda tangan + AAB + GitHub Release
+# - Run workflow (manual)          -> pilih debug / release
+
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: Jenis build
+        type: choice
+        options: [debug, release]
+        default: debug
   push:
     branches: [main, master]
-    tags: ["v*.*.*"]
+    tags: ['v*']
     paths-ignore:
       - '**.md'
       - '.gitignore'
 
+permissions:
+  contents: write
+
 jobs:
   apk:
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
+    env:
+      BUILD_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type || (startsWith(github.ref, 'refs/tags/v') && 'release' || 'debug') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,46 +43,95 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install dependencies and prepare Android
-        run: |
-          npm ci
-          npm run android
+      - name: Install dependencies (salin Monaco + JSZip ke www/)
+        run: npm ci || npm install
 
-      - name: Configure stable release signing
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: node configure-android-signing.js
+      - name: Verifikasi Monaco terbundel
+        run: npm run verify
 
-      - name: Build APK
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Tag harus sama dengan versi package.json
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          cd android
-          chmod +x gradlew
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            ./gradlew assembleRelease --no-daemon
-          else
-            ./gradlew assembleDebug --no-daemon
+          V=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${V}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} tidak sama dengan versi package.json (v${V}). Jalankan 'npm version patch|minor|major' lalu push tag-nya."
+            exit 1
           fi
 
-      - name: Upload APK artifact
+      - name: Siapkan proyek Android (ikon, splash, versi)
+        run: npm run android
+
+      # ---------- DEBUG ----------
+      - name: Build APK debug
+        if: env.BUILD_TYPE == 'debug'
+        run: |
+          node scripts/android.js debug-flags
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK debug
+        if: env.BUILD_TYPE == 'debug'
         uses: actions/upload-artifact@v4
         with:
-          name: CodeForge-APK-${{ github.run_number }}
-          path: android/app/build/outputs/apk/**/*.apk
+          name: CodeForge-APK-debug
+          path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      # ---------- RELEASE ----------
+      - name: Siapkan keystore
+        if: env.BUILD_TYPE == 'release'
         env:
-          GH_TOKEN: ${{ github.token }}
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          gh release create "$GITHUB_REF_NAME" android/app/build/outputs/apk/release/app-release.apk \
-            --title "CodeForge $GITHUB_REF_NAME" \
-            --notes "APK ditandatangani dengan kunci rilis stabil. Pengguna v1.5.3 atau lebih lama perlu uninstall versi lama dan memasang versi ini sekali; setelah itu, rilis yang ditandatangani dengan kunci yang sama dapat diperbarui di atas instalasi. Android tetap meminta persetujuan pengguna untuk pemasangan."
+          for v in KS_B64 KS_PASS KEY_ALIAS KEY_PASS; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Secret untuk ${v} belum diisi (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)."
+              exit 1
+            fi
+          done
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          {
+            echo "CF_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore"
+            echo "CF_KEYSTORE_PASSWORD=$KS_PASS"
+            echo "CF_KEY_ALIAS=$KEY_ALIAS"
+            echo "CF_KEY_PASSWORD=$KEY_PASS"
+          } >> "$GITHUB_ENV"
+
+      - name: Build APK + AAB rilis
+        if: env.BUILD_TYPE == 'release'
+        run: |
+          node scripts/android.js signing
+          node scripts/android.js guard-release
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Verifikasi tanda tangan APK
+        if: env.BUILD_TYPE == 'release'
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          V=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          cp "$APK" "dist/CodeForge-${V}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "dist/CodeForge-${V}.aab"
+
+      - name: Upload APK + AAB rilis
+        if: env.BUILD_TYPE == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeForge-release
+          path: dist/*
+          if-no-files-found: error
+
+      - name: GitHub Release
+        if: env.BUILD_TYPE == 'release' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

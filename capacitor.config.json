@@ -3,13 +3,12 @@
   "appName": "CodeForge",
   "webDir": "www",
   "server": {
-    "androidScheme": "https",
-    "cleartext": true
+    "androidScheme": "https"
   },
   "android": {
-    "allowMixedContent": true,
-    "backgroundColor": "#0d1117",
-    "webContentsDebuggingEnabled": true
+    "allowMixedContent": false,
+    "backgroundColor": "#070d12",
+    "webContentsDebuggingEnabled": false
   },
   "plugins": {
     "Filesystem": {
@@ -19,7 +18,7 @@
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#0a0e13"
+      "backgroundColor": "#070d12"
     }
   }
 }

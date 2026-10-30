@@ -12,22 +12,19 @@ Editor kode berbasis **Monaco Editor** (mesin yang sama dengan VS Code), tersedi
 - Pengaturan tampilan: ukuran ikon, ukuran teks, warna aksen (6 pilihan), font, glow, dan **tombol geser kanan** untuk scroll cepat di HP
 - Gaya tampilan **Formal** (default, ala editor desktop: ikon netral, tanpa glow) atau **Cerah** (berwarna), diatur di Pengaturan
 - Tombol lipat (‹) di tepi sidebar untuk menutup Explorer ke kiri
-- Ikon SVG berwarna menyala, tombol besar mudah ditekan di HP (min 44px)
-- Ikon launcher Android CodeForge (adaptif dan resolusi density) dibuat dari logo brand
-- Multi-tab, explorer, cari di file terbuka & workspace
+- Menu lengkap (File/Edit/View/Go/Help) dengan ikon, pintasan, dan tanda centang; Mode Zen & Layar Penuh
+- Dialog Pintasan Keyboard & Tentang, logo FORGE di header/status bar
+- Semua ikon SVG garis seragam (tanpa emoji/karakter simbol), lencana tipe file bergaya monogram tinted, tombol besar mudah ditekan di HP (min 44px)
+- Tema **Forge** (default, v2.0): zamrud → cyan di atas biru-hitam pekat, selaras dengan logo kodok FORGE. Palet lain tetap ada: Ubuntu, Fedora, Arch, Mint, Kali, Pop!_OS (chip di status bar atau View → Ganti Distro)
+- Menu bar lengkap berikon: File, Edit, Select, View, Go, Run, Help; menu klik kanan / tekan lama di tab & explorer; status bar interaktif
+- Multi-tab, cari di file terbuka & workspace
+- **Explorer lengkap**: folder baru, ganti nama, duplikat, pindah (dialog pilih folder), hapus dari workspace, dan **hapus file/folder asli**. Tombol ⋯ di tiap item atau tekan lama / klik kanan
 - Buka file / folder / ZIP, drag & drop
-- GGUF metadata viewer untuk file `.gguf`: menampilkan metadata dan hingga 100 info tensor pertama; hanya membaca 20 MiB awal, bukan seluruh bobot model. Parser dimuat dari CDN saat viewer digunakan (perlu internet).
 - Simpan ke Documents/CodeForge di Android (Capacitor Filesystem)
 - Ekspor workspace ke ZIP
 - Tema gelap / terang, minimap, word wrap, ligature
-- Bilah menu IDE lengkap: **File, Edit, Selection, View, Go, Run, Alat, GitHub, Help**; menu dapat digeser horizontal di layar kecil
-- Menu Selection menyediakan seleksi pintar, multi-kursor, dan pilih semua; menu Run menyediakan preview, muat ulang preview, dan palet perintah
-- Menu GitHub: fork repositori dari URL GitHub, pencarian repositori, dan panduan fork
-- Menu Alat: duplikat file aktif, tutup tab lain, statistik dokumen (baris/kata/karakter/kesalahan), format dokumen, palet perintah, ekspor ZIP, dan muat ulang editor
-- Salin seluruh isi file aktif ke clipboard
 - Keyboard shortcuts + tombol cepat di mobile
-- Checker otomatis hanya untuk rilis stabil GitHub: saat aplikasi Android dibuka/dilanjutkan dan tiap 6 jam selama aktif; pengguna diberi tautan rilis dan menyetujui pemasangan lewat Android
-- Offline setelah `npm run setup` (Monaco & JSZip lokal)
+- Offline penuh: Monaco & JSZip **selalu terbundel di APK** (tanpa CDN)
 
 ## Cara pakai (Web)
 
@@ -36,50 +33,79 @@ npm install          # otomatis jalankan setup (salin Monaco + JSZip)
 # lalu buka www/index.html di browser
 ```
 
-Tanpa `npm install`, Monaco akan dimuat dari CDN (butuh internet).
+Di **web**, tanpa `npm install` Monaco masih dimuat dari CDN sebagai cadangan (butuh internet).
+Di **APK**, CDN dimatikan: build berhenti dengan pesan jelas (`npm run verify`) bila Monaco belum terbundel.
 
-## Build APK otomatis (GitHub Actions)
+## Build APK
 
-1. Upload / push folder ini ke repositori GitHub.
-2. Buka tab **Actions** → **Build APK** → **Run workflow**.
-3. Setelah selesai, unduh artifact **CodeForge-APK-[nomor run]**.
+| Perintah | Hasil |
+|---|---|
+| `npm run build:debug` (alias `build:apk`) | `android/app/build/outputs/apk/debug/app-debug.apk` — debugging WebView, cleartext & mixed content **aktif** (uji coba) |
+| `npm run build:release` | `android/app/build/outputs/apk/release/app-release.apk` + `bundle/release/app-release.aab` — bertanda tangan, semua flag uji coba **mati** |
 
-Push tag versi `v*.*.*` akan membangun dan menerbitkan `app-release.apk` dengan signing key stabil dari GitHub Actions Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Jangan commit file keystore atau memasukkan secret ke kode. Branch build biasa tetap menggunakan debug APK. Checker membandingkan versi aplikasi dengan **rilis stabil yang diterbitkan**, bukan setiap commit; Android tetap meminta pengguna menyetujui pemasangan, dan pemeriksaan tidak berjalan saat aplikasi ditutup.
+`capacitor.config.json` sudah dalam keadaan **aman untuk rilis** (`webContentsDebuggingEnabled`, `cleartext`, `allowMixedContent` = false). Build debug menyalakannya hanya pada salinan hasil sync (`scripts/android.js debug-flags`); build rilis memeriksa ulang dan **gagal** bila masih ada flag uji coba.
 
-APK v1.5.3 dan sebelumnya memakai kunci debug yang berbeda. Untuk migrasi awal ke APK yang ditandatangani stabil, uninstall versi lama lalu pasang rilis stabil sekali. Setelah itu, rilis dengan kunci yang sama dapat dipasang di atas versi tersebut.
+`npm run android` (dipanggil otomatis) menyiapkan proyek: verifikasi Monaco → `cap add/sync` → ikon + splash → versionCode/versionName.
 
-## Build APK manual
+## APK rilis bertanda tangan
 
-```bash
-npm install
-npm run android          # setup + cap add android (sekali) + sync
-cd android
-./gradlew assembleDebug
-# APK: android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Atau satu perintah:
+**1. Buat keystore (sekali saja, simpan baik-baik — kehilangannya = tidak bisa update aplikasi):**
 
 ```bash
-npm run build:apk
+keytool -genkeypair -v -keystore codeforge-release.jks -alias codeforge \
+  -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Buka di Android Studio:
+**2a. Build lokal:**
 
 ```bash
-npm run open:android
+export CF_KEYSTORE_PATH=$PWD/codeforge-release.jks
+export CF_KEYSTORE_PASSWORD=...  CF_KEY_ALIAS=codeforge  CF_KEY_PASSWORD=...
+npm run build:release
 ```
+
+**2b. Build di GitHub Actions** — isi *Settings → Secrets and variables → Actions*:
+
+| Secret | Isi |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 codeforge-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | password keystore |
+| `ANDROID_KEY_ALIAS` | `codeforge` |
+| `ANDROID_KEY_PASSWORD` | password key |
+
+Lalu rilis dengan tag:
+
+```bash
+npm version patch        # atau minor / major — menaikkan versi + menyamakan index.html + membuat tag
+git push --follow-tags   # tag vX.Y.Z memicu build rilis + GitHub Release (APK + AAB)
+```
+
+Workflow juga bisa dijalankan manual (*Run workflow* → `release`). Push biasa ke `main` tetap menghasilkan APK debug.
+
+**versionCode** dihitung dari versi di `package.json`: `major×10000 + minor×100 + patch` (2.0.0 → 20000, 1.10.2 → 11002), jadi otomatis naik setiap kali versi dinaikkan. Workflow menolak tag yang tidak sama dengan versi `package.json`. Bisa ditimpa dengan env `VERSION_CODE`.
+
+## Ikon & splash Android
+
+Hasil sudah dibuat dan di-commit di `resources/android/res/` (ikon adaptif + bulat + monokrom Android 13, splash potret/lanskap, tema splash Android 12+). Semua PNG dikuantisasi palet dan logo web berformat WebP, sehingga seluruh aset gambar hanya ±330 KB. Disalin otomatis ke proyek Android oleh `npm run android`.
+Ganti logo? Ubah `assets/logo-source.png` (putih di atas hitam), lalu `python3 tools/make_android_res.py` (butuh `pillow`, `numpy` & `scipy`). Skrip itu juga membuat ulang logo/favicon web di `www/assets/`.
+
+## Explorer
+
+Klik tombol ⋯ pada file/folder, atau tekan lama / klik kanan:
+
+- **Ganti Nama · Duplikat · Pindah ke…** — di Android ikut mengubah salinan sungguhan di `Documents/CodeForge/`. Tab yang terbuka tetap terbuka (isi yang belum disimpan dipertahankan).
+- **Hapus dari Workspace** — hanya menyembunyikan dari explorer; file di penyimpanan tidak disentuh.
+- **Hapus File/Folder Asli…** — menghapus permanen (dengan konfirmasi). Android: file di `Documents/CodeForge/`. Browser desktop: hanya bila browser mengizinkan (`FileSystemHandle.remove`); jika tidak, aplikasi memberi tahu dan hanya menghapus dari workspace.
+- **Folder Baru** (tombol di header Explorer / menu File) dan **Muat dari Documents/CodeForge** (Android memuatnya otomatis saat dibuka).
+
+Batasan: file yang dibuka lewat *Buka File/Folder/ZIP* di browser/Android tidak punya path asli yang bisa dikelola web — ganti nama/pindah hanya berlaku di workspace sampai disimpan ke `Documents/CodeForge`.
 
 ## Catatan Android
 
 - **Buka Folder** bergantung pada WebView; jika tidak muncul, gunakan **Buka ZIP** atau **Buka File**.
 - **Simpan** menulis ke `Documents/CodeForge/...` (plugin Filesystem).
 - File biner akan diminta konfirmasi sebelum dibuka sebagai teks.
-- File `.gguf` dibuka di metadata viewer khusus; konten biner tidak dimasukkan ke Monaco atau disalin ke Documents.
 - Folder `node_modules`, `.git`, `build`, `dist` diabaikan saat buka folder/ZIP.
-
-## Menu GitHub
-Pilih **GitHub → Fork Repositori…**, lalu masukkan URL repositori publik/private yang bisa diakses di GitHub (contoh `https://github.com/pemilik/proyek`). CodeForge akan membuka halaman fork resmi GitHub; login dan konfirmasi fork dilakukan di GitHub. Menu ini tidak mengunggah workspace lokal secara otomatis.
 
 ## Pintasan utama
 
@@ -99,11 +125,15 @@ Pilih **GitHub → Fork Repositori…**, lalu masukkan URL repositori publik/pri
 
 ```
 ├── www/index.html          # Aplikasi utama (single-file)
-├── www/assets/             # Logo FORGE (WebP/PNG ringan)
+├── www/assets/             # Logo FORGE (WebP/PNG ringan) + favicon 192/512
+├── ROADMAP.md              # Yang masih kurang untuk menyaingi VS Code
+├── assets/                 # Logo sumber + master ikon/splash
+├── resources/android/res/  # Ikon & splash Android (hasil jadi, disalin saat build)
+├── scripts/                # verify-bundle, android (versi/signing/guard), sync-version
+├── tools/make_android_res.py
 ├── capacitor.config.json
 ├── package.json
 ├── copy.js                 # Salin Monaco + JSZip ke www/
-├── configure-android-signing.js # Signing release dari Actions Secrets
 ├── .github/workflows/apk.yml
 └── README.md
 ```

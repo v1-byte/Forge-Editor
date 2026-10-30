@@ -1,15 +1,19 @@
 {
   "name": "codeforge",
-  "version": "1.5.5",
+  "version": "2.0.0",
   "private": true,
   "description": "CodeForge — Monaco code editor as web app + Android APK (Capacitor)",
   "scripts": {
     "setup": "node copy.js",
+    "verify": "node scripts/verify-bundle.js",
     "postinstall": "node copy.js",
-    "android": "npm run setup && node -e \"const fs=require('fs');if(!fs.existsSync('android')){require('child_process').execSync('npx cap add android',{stdio:'inherit'})}\" && npx cap sync android && node copy-android-icons.js",
-    "sync": "npm run setup && npx cap sync android && node copy-android-icons.js",
-    "build:apk": "npm run android && cd android && chmod +x gradlew && ./gradlew assembleDebug",
-    "open:android": "npx cap open android"
+    "android": "npm run setup && npm run verify && node -e \"const fs=require('fs');if(!fs.existsSync('android')){require('child_process').execSync('npx cap add android',{stdio:'inherit'})}\" && npx cap sync android && node scripts/android.js prepare",
+    "sync": "npm run setup && npm run verify && npx cap sync android && node scripts/android.js prepare",
+    "build:debug": "npm run android && node scripts/android.js debug-flags && cd android && chmod +x gradlew && ./gradlew assembleDebug",
+    "build:apk": "npm run build:debug",
+    "build:release": "npm run android && node scripts/android.js signing && node scripts/android.js guard-release && cd android && chmod +x gradlew && ./gradlew assembleRelease bundleRelease",
+    "open:android": "npx cap open android",
+    "version": "node scripts/sync-version.js && git add www/index.html"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
@@ -17,7 +21,8 @@
     "@capacitor/filesystem": "^6.0.1",
     "@capacitor/status-bar": "^6.0.1",
     "jszip": "3.10.1",
-    "monaco-editor": "0.52.2"
+    "monaco-editor": "0.52.2",
+    "@codeforge/native-file": "file:plugins/native-file"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2"
