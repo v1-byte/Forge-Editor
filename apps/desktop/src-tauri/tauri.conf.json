@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Forge Editor",
+  "version": "0.1.0",
+  "identifier": "dev.v1byte.forge-editor",
+  "build": {
+    "beforeDevCommand": "npm run dev --workspace @forge/desktop",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build --workspace @forge/desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Forge Editor", "width": 1280, "height": 820, "minWidth": 760, "minHeight": 560 }],
+    "security": { "csp": "default-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost http://127.0.0.1:8080 http://localhost:8080; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'" }
+  },
+  "bundle": { "active": false, "targets": "all" }
+}

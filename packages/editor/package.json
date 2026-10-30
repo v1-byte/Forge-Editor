@@ -1,0 +1,10 @@
+{
+  "name": "@forge/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.tsx",
+  "scripts": { "build": "tsc -p tsconfig.json --noEmit", "typecheck": "tsc -p tsconfig.json --noEmit" },
+  "dependencies": { "@monaco-editor/react": "^4.7.0", "monaco-editor": "^0.52.2", "react": "^19.1.0" },
+  "devDependencies": { "@types/react": "^19.1.0", "typescript": "^5.8.3" }
+}

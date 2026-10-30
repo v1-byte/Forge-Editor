@@ -1,0 +1,15 @@
+{
+  "name": "forge-editor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Forge Editor: Monaco-based code editor with local llama.cpp inference.",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "npm run build --workspace @forge/core && npm run dev --workspace @forge/desktop",
+    "build": "npm run build --workspace @forge/core && npm run build --workspace @forge/editor && npm run build --workspace @forge/ui && npm run build --workspace @forge/desktop",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:desktop": "npm run tauri --workspace @forge/desktop -- dev",
+    "dev:extension": "npm run compile --workspace forge-editor-assistant"
+  },
+  "engines": { "node": ">=20.0.0", "npm": ">=10.0.0" }
+}
