@@ -230,7 +230,8 @@ public class NativeFilePlugin extends Plugin {
                     call.resolve(ret);
                     return;
                 }
-                String authority = getContext().getPackageName() + ".nativefile.provider";
+                // Aplikasi utama sudah mendaftarkan FileProvider ini di AndroidManifest.
+                String authority = getContext().getPackageName() + ".fileprovider";
                 Uri uri = FileProvider.getUriForFile(getContext(), authority, apk);
                 Intent install = new Intent(Intent.ACTION_VIEW);
                 install.setDataAndType(uri, "application/vnd.android.package-archive");
