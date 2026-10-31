@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#111111" />
+  <title>Forge Editor</title>
+  <link rel="icon" type="image/png" href="logo-192.png" />
+  <style>
+    :root{color-scheme:dark;--bg:#1e1e1e;--panel:#181818;--panel2:#252526;--border:#303033;--muted:#929292;--text:#d4d4d4;--blue:#0e639c;--orange:#ff6a1a;--green:#7fc77c;--purple:#a889e8;--red:#ed6a5e;font:13px Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text)}button,input,textarea,select{font:inherit}button{color:inherit;cursor:pointer}button:disabled{opacity:.42;cursor:not-allowed}a{color:#79b8ff;text-decoration:none}.app{height:100dvh;display:grid;grid-template-rows:38px minmax(0,1fr) 23px;background:var(--bg)}
+    .topbar{display:flex;align-items:center;gap:10px;padding:0 12px;background:#181818;border-bottom:1px solid var(--border);font-size:12px}.brand{display:flex;align-items:center;gap:8px;color:white;font-weight:650;white-space:nowrap}.brand img{width:22px;height:22px;border-radius:5px}.top-title{color:#9d9d9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-spacer{flex:1}.api-pill{display:flex;align-items:center;gap:7px;padding:4px 8px;border:1px solid #343438;border-radius:999px;color:#c7c7c7;max-width:360px;overflow:hidden;white-space:nowrap}.dot{width:8px;height:8px;border-radius:50%;background:#888;flex:none}.dot.online{background:var(--green)}.dot.offline{background:var(--red)}.dot.checking{background:#efc15e}
+    .work{display:grid;grid-template-columns:48px 270px minmax(260px,1fr) 350px;min-height:0;position:relative}.activity{background:#181818;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:8px 0}.activity-group{display:flex;flex-direction:column;gap:4px;width:100%;align-items:center}.activity button{position:relative;width:40px;height:40px;border:0;background:transparent;color:#888;border-radius:5px;font-size:19px}.activity button:hover,.activity button.active{color:white;background:#27272a}.activity button.active:before{content:"";position:absolute;left:-4px;top:5px;bottom:5px;width:2px;background:#0e8bdc;border-radius:2px}.side{background:#1f1f1f;border-right:1px solid var(--border);min-width:0;display:flex;flex-direction:column}.side-head{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;letter-spacing:.06em;color:#bdbdbd}.side-actions{display:flex;gap:4px}.icon-btn,.small-button{border:1px solid transparent;background:transparent;border-radius:4px;padding:5px 7px;color:#aaa}.icon-btn:hover,.small-button:hover{background:#303034;color:white}.small-button{border:1px solid #414146;background:#29292c;font-size:11px}.side-body{padding:8px;overflow:auto;min-height:0;flex:1}.section-label{font-size:10px;letter-spacing:.08em;color:#888;text-transform:uppercase;margin:12px 2px 6px}.tree-file,.search-result,.feature-button{width:100%;display:flex;align-items:center;gap:8px;text-align:left;border:0;background:transparent;color:#c5c5c5;padding:6px 7px;border-radius:4px;min-height:28px}.tree-file:hover,.search-result:hover,.feature-button:hover{background:#2a2d2e}.tree-file.selected{background:#37373d;color:white}.file-icon{font:11px "SFMono-Regular",Consolas,monospace;color:#d2a63b;min-width:22px}.tree-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.dirty-dot{color:#e8bf56;font-size:9px}.empty-note,.muted{font-size:12px;color:#929292;line-height:1.6;padding:8px}.feature-button{border:1px solid #333;margin:5px 0;background:#191919;padding:9px}.feature-button b{display:block;color:#e2e2e2;font-size:12px}.feature-button small{display:block;color:#999;font-size:10px;margin-top:3px}.feature-icon{width:28px;height:28px;border-radius:6px;background:#2c2824;color:#ff8c49;display:grid;place-items:center;flex:none}.side input{width:100%;background:#252526;border:1px solid #414146;color:white;border-radius:4px;padding:7px 8px;outline:none}.side input:focus,select:focus,textarea:focus{border-color:#087ec0}
+    .editor-column{display:flex;flex-direction:column;min-width:0;min-height:0;background:#1e1e1e}.tabbar{height:36px;display:flex;overflow:auto;align-items:stretch;background:#181818;border-bottom:1px solid var(--border);flex:none}.tab{border:0;border-right:1px solid var(--border);background:#202023;color:#aaa;padding:0 10px;display:flex;align-items:center;gap:8px;min-width:100px;max-width:220px}.tab.active{background:#1e1e1e;color:#fff;border-top:1px solid var(--orange)}.tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tab-close{margin-left:auto;border-radius:3px;padding:0 4px}.tab-close:hover{background:#48484d}.toolbar{height:36px;display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid var(--border);overflow:auto;flex:none}.tool-btn{border:1px solid #414146;border-radius:4px;background:#29292c;padding:5px 9px;white-space:nowrap;font-size:11px}.tool-btn:hover{background:#37373b}.tool-btn.primary{background:#0e639c;border-color:#0e639c;color:white}.tool-btn.orange{background:#ff6a1a1c;border-color:#7a411f;color:#ff9a60}.tool-btn.purple{background:#6e40c930;border-color:#614497;color:#c5a9ff}.toolbar-spacer{flex:1}.dirty-state{font-size:11px;color:var(--green);white-space:nowrap}.dirty-state.dirty{color:#e7c05b}
+    .editor-wrap{position:relative;display:flex;min-height:0;flex:1;background:#1e1e1e}.gutter{width:48px;flex:none;text-align:right;padding:12px 10px;color:#666;background:#1e1e1e;font:12px/20px "SFMono-Regular",Consolas,monospace;overflow:hidden;user-select:none}.editor{width:100%;height:100%;resize:none;outline:none;border:0;background:transparent;color:#d4d4d4;padding:12px 10px;font:13px/20px "SFMono-Regular",Consolas,monospace;tab-size:4;white-space:pre;overflow:auto}.editor:focus{border:0}.editor[hidden],.empty-editor[hidden]{display:none}.empty-editor{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#929292;padding:24px;line-height:1.8}.empty-editor strong{font-size:16px;color:#d0d0d0;margin-bottom:5px}.terminal{height:180px;flex:none;background:#181818;border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:36px}.terminal.collapsed{height:36px}.terminal-head{height:35px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid #2b2b2e;flex:none;font-size:11px}.terminal-head strong{letter-spacing:.07em}.terminal-spacer{flex:1}.terminal-log{overflow:auto;flex:1;padding:8px 10px;color:#aaa;font:11px/1.6 "SFMono-Regular",Consolas,monospace}.log-line{white-space:pre-wrap;overflow-wrap:anywhere}.statusbar{display:flex;align-items:center;justify-content:space-between;padding:0 9px;background:#0879b9;color:white;font-size:11px;white-space:nowrap;overflow:hidden}.status-left,.status-right{display:flex;gap:13px;align-items:center;overflow:hidden}.statusbar button{border:0;color:white;background:transparent;padding:2px 4px}.statusbar button:hover{background:#ffffff25}
+    .right{background:#1b1b1b;border-left:1px solid var(--border);display:flex;flex-direction:column;min-width:0;min-height:0}.right-head{height:38px;display:flex;align-items:center;gap:6px;padding:0 7px;border-bottom:1px solid var(--border);overflow:auto;flex:none}.right-head button{border:0;background:transparent;border-radius:4px;padding:6px 8px;color:#929292;white-space:nowrap;font-size:11px}.right-head button:hover,.right-head button.active{background:#343438;color:white}.panel{overflow:auto;min-height:0;flex:1;padding:10px}.panel[hidden]{display:none}.panel-title{font-size:12px;font-weight:650;color:#eee;margin:2px 0 10px}.panel-subtitle{font-size:11px;color:#999;line-height:1.55;margin-bottom:10px}.info-box{border:1px solid #343438;background:#202023;padding:9px;border-radius:5px;margin:7px 0;font-size:11px;line-height:1.6}.info-line{color:#b8b8b8;padding:4px 0;border-bottom:1px solid #303033}.model-card{border:1px solid #343438;background:#202023;padding:8px;border-radius:5px;margin:7px 0;display:flex;flex-direction:column;gap:4px;font-size:11px}.model-card b{color:#e4e4e4;overflow-wrap:anywhere}.metadata-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(90px,1fr);gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #2b2b2e}.metadata-row code{font-size:10px;color:#a1a1a1;overflow-wrap:anywhere}.metadata-row small{grid-column:1/-1;color:#777;font-size:9px}.meta-input{width:100%;min-width:0;background:#252526;color:#ffa36b;border:1px solid #39393c;border-radius:3px;padding:5px;font:11px "SFMono-Regular",Consolas,monospace}.meta-value{color:#ffa36b;overflow-wrap:anywhere}.tensor-row{padding:6px 0;border-bottom:1px solid #2b2b2e;display:flex;flex-direction:column;gap:3px;font:10px/1.45 "SFMono-Regular",Consolas,monospace}.tensor-row b{color:#61c9ae;font-weight:500;overflow-wrap:anywhere}.tensor-row span,.tensor-row small{color:#929292}.hex-toolbar{display:flex;gap:5px;align-items:center;margin-bottom:8px}.hex-toolbar input{width:95px;background:#252526;color:#eee;border:1px solid #444;border-radius:4px;padding:5px}.hex-line{display:grid;grid-template-columns:70px 1fr 110px;gap:8px;border-bottom:1px solid #28282a;padding:3px 0;font:10px/1.5 "SFMono-Regular",Consolas,monospace}.hex-line>code{color:#59a6e6}.hex-line .ascii{color:#e3a48b;overflow:hidden}.hex-values{display:flex;gap:3px;flex-wrap:wrap}.hex-byte{border:0;background:transparent;color:#c7d9e8;padding:1px 2px;border-radius:2px;font:10px monospace}.hex-byte:hover{background:#37373d}.hex-byte.edited{color:#ffb354;background:#4e3520}.messages{display:flex;flex-direction:column;gap:8px;min-height:100px}.message{max-width:95%;padding:8px;border-radius:6px;background:#2a2a2d;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.55}.message.user{align-self:flex-end;background:#0e639c;color:white}.message.assistant{align-self:flex-start}.message b{display:block;font-size:10px;margin-bottom:4px;opacity:.8}.chat-input{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px}.chat-input textarea{min-height:58px;resize:vertical;background:#252526;border:1px solid #414146;border-radius:4px;color:#eee;padding:7px;font-size:11px}.chat-input button{align-self:end}
+    .form-row{margin:9px 0}.form-row label{display:block;font-size:10px;color:#aaa;margin-bottom:5px}.form-row input,.form-row select{width:100%;background:#252526;border:1px solid #414146;border-radius:4px;color:#eee;padding:7px}.form-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.command{display:block;border:1px solid #333;background:#111;padding:8px;border-radius:4px;color:#b0dcb5;overflow-wrap:anywhere;font:10px/1.5 monospace;margin:8px 0}.warning{border-left:3px solid #e3ad55;background:#302818;color:#ddc99f;padding:8px;font-size:10px;line-height:1.55;margin:8px 0}.success{color:#8bd48a}.error{color:#ff8078}.dialog{width:min(520px,calc(100vw - 30px));background:#202023;border:1px solid #45454b;color:#ddd;border-radius:8px;padding:0;box-shadow:0 18px 80px #000b}.dialog::backdrop{background:#0009}.dialog-head{padding:12px 15px;border-bottom:1px solid #38383b;display:flex;justify-content:space-between}.dialog-body{padding:14px}.toast-root{position:fixed;right:12px;bottom:34px;z-index:99;display:flex;flex-direction:column;gap:6px;pointer-events:none}.toast{max-width:min(420px,calc(100vw - 24px));background:#2a2a2d;border:1px solid #49494d;border-radius:5px;padding:9px 12px;box-shadow:0 7px 24px #0008;font-size:11px}.toast.success{border-color:#3d8050}.toast.warn{border-color:#997841}.toast.error{border-color:#99524b}
+    body.sidebar-collapsed .side{display:none}body.sidebar-collapsed .work{grid-template-columns:48px minmax(260px,1fr) 350px}body.sidebar-collapsed .editor-column{grid-column:2}
+    @media(max-width:1120px){.work{grid-template-columns:44px 230px minmax(220px,1fr) 310px}.right-head button{padding:6px}.side-head{padding:0 7px}}
+    @media(max-width:850px){.work{grid-template-columns:42px 210px minmax(180px,1fr)}.right{position:absolute;z-index:10;right:0;top:0;bottom:0;width:min(360px,92vw);box-shadow:-12px 0 30px #0007}.right:not(.open){display:none}.api-pill{max-width:220px}.top-title{display:none}}
+    @media(max-width:560px){.work{grid-template-columns:40px minmax(0,1fr)}.side{position:absolute;left:40px;top:0;bottom:0;width:min(280px,82vw);z-index:12;box-shadow:10px 0 30px #0007}.toolbar{gap:4px;padding:0 5px}.tool-btn{padding:5px 7px}.terminal{height:130px}.right{width:100vw}.api-pill{max-width:145px}.brand span{display:none}.status-right{display:none}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><img src="logo-192.png" alt="Forge" /><span>Forge Editor</span></div>
+      <div class="top-title">Local AI workbench · file access requires your selection</div>
+      <div class="top-spacer"></div>
+      <div class="api-pill" title="Live status from /health and /v1/models"><span id="apiDot" class="dot checking"></span><span id="apiText">Checking server…</span></div>
+      <button class="icon-btn" data-action="refresh-api" title="Refresh server status">↻</button>
+      <button class="icon-btn" data-action="settings" title="Settings">⚙</button>
+    </header>
+    <main class="work">
+      <nav class="activity" aria-label="Main navigation">
+        <div class="activity-group">
+          <button class="active" data-view="explorer" title="Explorer">▤</button>
+          <button data-view="search" title="Search">⌕</button>
+          <button data-view="git" title="Source control">⑂</button>
+          <button data-view="extensions" title="Extensions">▦</button>
+          <button data-view="neural" title="GGUF and model tools">◈</button>
+        </div>
+        <div class="activity-group">
+          <button data-action="github" title="Open repository">◉</button>
+          <button data-action="settings" title="Settings">⚙</button>
+        </div>
+      </nav>
+      <aside class="side" id="sidePanel">
+        <div class="side-head"><span id="workspaceName">WORKSPACE</span><div class="side-actions"><button class="icon-btn" data-action="open-folder" title="Open local folder">▱</button><button class="icon-btn" data-action="new-file" title="Create file in selected folder">＋</button></div></div>
+        <div class="side-body" id="workspaceSection">
+          <section id="explorerSection">
+            <div class="section-label">Explorer</div>
+            <div class="side-actions" style="margin-bottom:8px"><button class="small-button" data-action="open-folder">Open Folder</button><button class="small-button" data-action="open-files">Open Files</button></div>
+            <div id="fileTree"><div class="empty-note">Open a local folder or choose files. The browser only accesses files you explicitly select.</div></div>
+          </section>
+          <section id="searchSection" hidden>
+            <div class="section-label">Search opened files</div>
+            <input id="workspaceSearch" placeholder="Search path or opened text…" />
+            <div class="form-actions"><button class="small-button" id="searchCurrent">Search</button></div>
+            <div id="searchResults"></div>
+          </section>
+          <section id="gitSection" hidden>
+            <div class="section-label">Source control</div>
+            <div class="warning">This browser view cannot read your local Git state or push commits. No GitHub connection is claimed.</div>
+            <button class="feature-button" data-action="github"><span class="feature-icon">⑂</span><span><b>Open public repository</b><small>v1-byte/Forge-Editor</small></span></button>
+            <button class="feature-button" data-action="git-push"><span class="feature-icon">↑</span><span><b>Push changes</b><small>Requires an authenticated Git client</small></span></button>
+          </section>
+          <section id="extensionsSection" hidden>
+            <div class="section-label">Extensions</div>
+            <div class="warning">This repository does not include an extension marketplace or plugin runtime.</div>
+            <button class="small-button" data-action="extensions">Check extension capability</button>
+          </section>
+          <section id="neuralSection" hidden>
+            <div class="section-label">Forge model tools</div>
+            <button class="feature-button" data-right-tab="import"><span class="feature-icon">⇧</span><span><b>Import / Download</b><small>Choose a local GGUF or request a Hugging Face download</small></span></button>
+            <button class="feature-button" data-right-tab="inspect"><span class="feature-icon">⌕</span><span><b>Inspect GGUF</b><small>Read actual tensor and metadata header</small></span></button>
+            <button class="feature-button" data-right-tab="metadata"><span class="feature-icon">≡</span><span><b>Metadata editor</b><small>Edit supported scalar keys and export a new copy</small></span></button>
+            <button class="feature-button" data-right-tab="hex"><span class="feature-icon">▦</span><span><b>Hex editor</b><small>Inspect and patch a selected local file copy</small></span></button>
+            <button class="feature-button" data-right-tab="quantize"><span class="feature-icon">◈</span><span><b>Quantize</b><small>Prepare the real CLI command; browser execution is unavailable</small></span></button>
+            <button class="feature-button" data-right-tab="lab"><span class="feature-icon">✦</span><span><b>Chat Lab</b><small>Uses the connected llama-server model</small></span></button>
+            <button class="feature-button" data-right-tab="api"><span class="feature-icon">⌁</span><span><b>API Server</b><small>Live health and model list; no process control</small></span></button>
+          </section>
+        </div>
+      </aside>
+      <section class="editor-column">
+        <div class="tabbar" id="tabs"></div>
+        <div class="toolbar">
+          <button class="tool-btn primary" data-action="save">Save</button>
+          <button class="tool-btn" data-action="reload">Reload from file</button>
+          <button class="tool-btn orange" id="exportCopy" data-action="export" disabled>Export Copy</button>
+          <button class="tool-btn" data-action="run">Run</button>
+          <button class="tool-btn purple" data-action="copilot">Copilot</button>
+          <span class="toolbar-spacer"></span><span class="dirty-state" id="dirtyState">Ready</span>
+        </div>
+        <div class="editor-wrap">
+          <div class="gutter" id="lineNumbers">1</div>
+          <textarea id="editor" class="editor" aria-label="Selected text file editor" spellcheck="false" hidden></textarea>
+          <div class="empty-editor" id="emptyEditor"><strong>Forge Editor</strong><span>Open a local folder or file. No sample repository files or model are assumed.</span><button class="tool-btn primary" style="margin-top:12px" data-action="open-folder">Open local folder</button></div>
+        </div>
+        <section class="terminal" id="terminal">
+          <div class="terminal-head"><strong>ACTIVITY LOG</strong><span class="muted" style="padding:0">No shell is executed by this page</span><span class="terminal-spacer"></span><button class="icon-btn" id="clearLog" title="Clear log">⌫</button><button class="icon-btn" id="toggleLog" title="Collapse activity log">⌄</button></div>
+          <div class="terminal-log" id="terminalLog"><div class="log-line">Forge Editor ready. Actions here report browser/API results; this is not a system terminal.</div></div>
+        </section>
+      </section>
+      <aside class="right open" id="rightPanel">
+        <div class="right-head">
+          <button class="active" data-right-tab="inspect">Inspect</button>
+          <button data-right-tab="metadata">Metadata</button>
+          <button data-right-tab="hex">Hex</button>
+          <button data-right-tab="binary">Binary</button>
+          <button data-right-tab="lab">Chat Lab</button>
+          <button data-right-tab="copilot">Copilot</button>
+          <button data-right-tab="import">Import</button>
+          <button data-right-tab="quantize">Quantize</button>
+          <button data-right-tab="api">API</button>
+        </div>
+        <section class="panel" data-panel="inspect">
+          <div class="panel-title">GGUF Inspector</div>
+          <div class="panel-subtitle" id="ggufSummary">No GGUF loaded</div>
+          <div class="form-actions"><button class="small-button" data-action="choose-model">Choose GGUF file</button><button class="small-button" id="openHex" data-action="open-hex" disabled>Open Hex View</button><button class="small-button" data-action="refresh-api">Refresh models</button></div>
+          <div class="section-label">Tensors</div><div id="tensorRows"><p class="muted">Choose a GGUF file to inspect its real tensor header.</p></div>
+          <div class="section-label">Live server models</div><div id="apiSummary"><p class="muted">Checking server…</p></div>
+        </section>
+        <section class="panel" data-panel="metadata" hidden>
+          <div class="panel-title">GGUF Metadata</div><div class="panel-subtitle">Only supported scalar entries can be edited. Saving creates a new GGUF copy; original bytes remain unchanged.</div>
+          <div id="metadataNotice" class="warning">Choose a GGUF file to inspect metadata.</div>
+          <div class="form-actions"><button class="small-button" data-action="copy-meta">Copy metadata</button><button class="tool-btn primary" id="saveMetadata" data-action="save-metadata" disabled>Export edited GGUF copy</button></div>
+          <div id="metadataRows"></div>
+        </section>
+        <section class="panel" data-panel="hex" hidden>
+          <div class="panel-title">Hex / Binary Editor</div><div class="panel-subtitle">Reads the file you selected. Patches apply only to a newly saved copy, never silently overwrite the source.</div>
+          <div class="hex-toolbar"><button class="small-button" data-action="hex-prev">−256</button><input id="hexOffsetInput" value="0" aria-label="Byte offset"/><button class="small-button" data-action="hex-next">+256</button><button class="tool-btn primary" data-action="save-hex-copy">Save Copy</button></div>
+          <div id="hexRows"><p class="muted">Open a local file to view bytes.</p></div>
+        </section>
+        <section class="panel" data-panel="binary" hidden>
+          <div class="panel-title">Binary View</div><div class="panel-subtitle">Shows the selected file’s bytes at the current offset. Values are read directly from the user-selected file.</div>
+          <div class="hex-toolbar"><button class="small-button" data-action="hex-prev">−256</button><input value="binary" readonly aria-label="Current view offset"/><button class="small-button" data-action="hex-next">+256</button></div>
+          <pre id="binaryRows" class="command">Open a local file to view bits.</pre>
+        </section>
+        <section class="panel" data-panel="lab" hidden>
+          <div class="panel-title">Chat Lab</div><div class="panel-subtitle">Live OpenAI-compatible chat request to this application’s llama-server. Model availability comes from /v1/models.</div>
+          <div class="form-row"><label for="modelSelect">Model</label><select id="modelSelect"><option>No models reported by server</option></select></div>
+          <div class="messages" id="labMessages"></div>
+          <div class="chat-input"><textarea id="labInput" placeholder="Ask about the current project or a model…"></textarea><button class="tool-btn primary" id="sendLab">Send</button></div>
+          <div class="form-actions"><button class="small-button" id="clearLab">Clear this session’s chat</button></div>
+        </section>
+        <section class="panel" data-panel="copilot" hidden>
+          <div class="panel-title">Copilot</div><div class="panel-subtitle">Uses the selected server model and current text draft. Code changes are proposed first; apply them only after review.</div>
+          <div class="messages" id="copilotMessages"></div>
+          <div class="chat-input"><textarea id="copilotInput" placeholder="Explain, review, or request a code edit…"></textarea><button class="tool-btn primary" id="sendCopilot">Ask</button></div>
+          <div class="form-actions"><button class="small-button" data-action="format">Trim trailing whitespace</button><span class="muted" style="padding:4px">Not a language-aware formatter.</span></div>
+        </section>
+        <section class="panel" data-panel="import" hidden>
+          <div class="panel-title">Import / Download</div><div class="panel-subtitle">Choose a local GGUF or ask a router-mode llama-server to download a model. Import and conversion are separate operations.</div>
+          <div class="form-actions"><button class="tool-btn primary" data-action="choose-model">Choose local GGUF</button></div>
+          <div class="info-box" id="selectedModelFile">No local model file selected.</div>
+          <div class="section-label">Hugging Face download (router mode)</div>
+          <div class="form-row"><label for="hfRepo">Repository/model ID</label><input id="hfRepo" placeholder="organization/model-GGUF" /></div>
+          <button class="tool-btn primary" data-action="download-model">Request server download</button>
+          <div class="warning">This uses POST /models on a router server and downloads into its cache. It does not upload a browser file or convert HF weights to GGUF.</div>
+          <div class="section-label">HF → GGUF conversion</div><div class="warning">The repository contains a conversion CLI, but no conversion job API. Conversion is not run from this browser page.</div>
+          <button class="small-button" data-action="run">Show execution limitation</button>
+        </section>
+        <section class="panel" data-panel="quantize" hidden>
+          <div class="panel-title">Quantize GGUF</div><div class="panel-subtitle">The repo includes llama-quantize CLI; the current HTTP server has no quantization job endpoint.</div>
+          <div class="info-box" id="quantizeInput">No input GGUF selected</div>
+          <div class="form-row"><label for="quantType">Output type</label><select id="quantType"><option>Q4_K_M</option><option>Q5_K_M</option><option>Q8_0</option></select></div>
+          <div class="form-actions"><button class="tool-btn" data-action="quantize-prepare">Prepare CLI command</button><button class="small-button" data-action="quantize-copy">Copy command</button></div>
+          <code class="command" id="quantCommand">Select a local GGUF to prepare a command.</code>
+          <div class="warning">No quantization is executed here. Verify input/output paths, executable, disk space, and model rights in a trusted terminal. The original file is never replaced.</div>
+        </section>
+        <section class="panel" data-panel="api" hidden>
+          <div class="panel-title">API Server</div><div class="panel-subtitle">Live liveness and model list from the same-origin server. This panel cannot launch, stop, or restart processes.</div>
+          <div class="info-box" id="apiDetails">Checking server…</div>
+          <div class="form-actions"><button class="tool-btn primary" data-action="refresh-api">Refresh status</button><button class="small-button" data-action="server-start">Start server</button><button class="small-button" data-action="server-stop">Stop server</button></div>
+          <div class="warning">Start/Stop controls report that no process-control API is available; they will not signal or execute a process.</div>
+          <div class="section-label">OpenAI-compatible endpoints</div><div class="info-box">Chat: POST /v1/chat/completions<br/>Model list: GET /v1/models<br/>Liveness: GET /health</div>
+        </section>
+      </aside>
+    </main>
+    <footer class="statusbar"><div class="status-left"><span>LOCAL FILES · permission-based</span><span id="currentPath">No file selected</span></div><div class="status-right"><span id="statusText">Ready</span><button data-action="refresh-api">API status ↻</button></div></footer>
+  </div>
+  <dialog class="dialog" id="settingsDialog">
+    <div class="dialog-head"><strong>Settings</strong><button class="icon-btn" data-action="settings-close">×</button></div>
+    <div class="dialog-body">
+      <div class="warning">API credentials stay in memory only for this page session and are not saved. Use only a trusted local server.</div>
+      <div class="form-row"><label for="apiKey">Optional API key (Authorization: Bearer)</label><input id="apiKey" type="password" autocomplete="off" placeholder="Leave blank if server does not require a key" /></div>
+      <div class="form-row"><label><input id="formatOnSave" type="checkbox" style="width:auto;margin-right:7px" />Trim trailing whitespace on save</label></div>
+      <div class="form-actions"><button class="tool-btn primary" data-action="settings-close">Save for this session</button></div>
+    </div>
+  </dialog>
+  <div class="toast-root" id="toasts" aria-live="polite"></div>
+  <input id="fileFallback" type="file" multiple webkitdirectory directory hidden />
+  <input id="singleFileInput" type="file" multiple hidden />
+  <input id="modelFileInput" type="file" accept=".gguf,application/octet-stream" hidden />
+  <script type="module" src="forge-editor-app.js"></script>
+</body>
+</html>
