@@ -26,9 +26,10 @@ npm run build
 - **GGUF Inspector:** membaca header GGUF versi 2–3, metadata, dan daftar tensor dari file lokal yang dipilih. Ukuran header yang dibaca dibatasi 64 MiB.
 - **Metadata:** dapat mengubah key string deskriptif tertentu (`general.name`, `general.author`, `general.description`, `general.basename`, `general.finetune`, `general.license`, `general.url`, `general.organization`, `general.repo_url`) lalu mengekspor file GGUF baru. Array dan metadata struktural tetap read-only; sumber tidak ditimpa.
 - **Hex/Binary:** menampilkan byte aktual file terpilih dan memungkinkan patch byte; hasil diekspor sebagai salinan terpisah. Penyimpanan file besar memakai Save As browser bila tersedia.
-- **Chat Lab/Copilot:** memakai model yang dilaporkan oleh `GET /v1/models` melalui `POST /v1/chat/completions`. Copilot mengusulkan perubahan; pengguna meninjau sebelum menerapkan draft dan menyimpan file.
+- **Chat Lab:** memakai model yang dipilih di panel Chat Lab melalui `POST /v1/chat/completions`.
+- **Copilot:** memiliki pemilih model tersendiri. Di mode MODEL, pilihan dibatasi ke model yang sedang aktif. Di mode ROUTER, daftar mencakup cache server; model yang belum aktif dimuat lewat `POST /models/load` dan Copilot menunggu event status loaded sebelum inferensi. Copilot mengusulkan perubahan; pengguna meninjau sebelum menerapkan draft dan menyimpan file.
 - **API Server:** status berasal dari `GET /health` dan model list dari `GET /v1/models`. API key opsional dimasukkan pengguna dan hanya berada di memori tab saat itu.
-- **Import:** pilih GGUF lokal untuk inspeksi, atau minta server mode ROUTER mengunduh model melalui `POST /models`; progres dicoba dibaca dari `/models/sse`.
+- **Import:** pilih GGUF lokal untuk inspeksi, atau minta server mode ROUTER mengunduh model HF/GGUF melalui `POST /models`; daftar cache dari `GET /models` diperbarui melalui `/models/sse`. Pilih model yang selesai diunduh di Copilot lalu muat dari cache. Setelah file tersedia di cache server, inferensi berjalan lokal; unduhan awal tetap memerlukan koneksi internet.
 - **Quantize:** menyiapkan dan menyalin contoh perintah `llama-quantize`, tetapi tidak menjalankannya dari browser.
 
 ## Batasan yang disengaja

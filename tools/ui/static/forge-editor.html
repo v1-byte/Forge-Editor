@@ -145,7 +145,10 @@
           <div class="form-actions"><button class="small-button" id="clearLab">Clear this session’s chat</button></div>
         </section>
         <section class="panel" data-panel="copilot" hidden>
-          <div class="panel-title">Copilot</div><div class="panel-subtitle">Uses the selected server model and current text draft. Code changes are proposed first; apply them only after review.</div>
+          <div class="panel-title">Copilot</div><div class="panel-subtitle">Choose a local inference model for Copilot. Router-cached models are loaded before inference; code changes are proposed first for review.</div>
+          <div class="form-row"><label for="copilotModelSelect">AI model</label><select id="copilotModelSelect"><option value="">No models reported by server</option></select></div>
+          <div class="form-actions"><button class="small-button" data-action="refresh-models">Refresh models</button><button class="small-button" data-action="load-copilot-model" id="loadCopilotModel" hidden>Load selected model</button></div>
+          <div class="muted" id="copilotModelStatus">Copilot uses a model provided by the local inference server.</div>
           <div class="messages" id="copilotMessages"></div>
           <div class="chat-input"><textarea id="copilotInput" placeholder="Explain, review, or request a code edit…"></textarea><button class="tool-btn primary" id="sendCopilot">Ask</button></div>
           <div class="form-actions"><button class="small-button" data-action="format">Trim trailing whitespace</button><span class="muted" style="padding:4px">Not a language-aware formatter.</span></div>
@@ -156,8 +159,9 @@
           <div class="info-box" id="selectedModelFile">No local model file selected.</div>
           <div class="section-label">Hugging Face download (router mode)</div>
           <div class="form-row"><label for="hfRepo">Repository/model ID</label><input id="hfRepo" placeholder="organization/model-GGUF" /></div>
+          <div class="muted">For GGUF repositories with several quantizations, append a tag such as :Q4_K_M. Router downloads into its local cache.</div>
           <button class="tool-btn primary" data-action="download-model">Request server download</button>
-          <div class="warning">This uses POST /models on a router server and downloads into its cache. It does not upload a browser file or convert HF weights to GGUF.</div>
+          <div class="warning">After the download completes, the model appears in Copilot. Load it from the Router cache before inference. This does not upload a browser file or convert HF weights to GGUF.</div>
           <div class="section-label">HF → GGUF conversion</div><div class="warning">The repository contains a conversion CLI, but no conversion job API. Conversion is not run from this browser page.</div>
           <button class="small-button" data-action="run">Show execution limitation</button>
         </section>

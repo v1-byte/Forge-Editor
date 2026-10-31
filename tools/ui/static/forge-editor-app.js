@@ -189,8 +189,8 @@ if (typeof document !== 'undefined') {
 const state = {
 	rootHandle: null, rootName: '', files: new Map(), docs: new Map(), tabs: [], current: '',
 	selectedFile: null, gguf: null, metadataEdits: new Map(), hexOffset: 0, hexPatch: null,
-	models: [], selectedModel: '', apiKey: '', chat: [], search: '', activeView: 'explorer', activePanel: 'inspect',
-	formatOnSave: false, busy: false, abort: null
+	models: [], routerModels: [], selectedModel: '', selectedCopilotModel: '', apiKey: '', chat: [], search: '', activeView: 'explorer', activePanel: 'inspect',
+	formatOnSave: false, busy: false, abort: null, watchingModelProgress: false, modelProgressReady: null
 };
 
 const $ = selector => document.querySelector(selector);
@@ -198,7 +198,8 @@ const ui = {
 	tree: $('#fileTree'), tabs: $('#tabs'), editor: $('#editor'), empty: $('#emptyEditor'),
 	path: $('#currentPath'), dirty: $('#dirtyState'), status: $('#statusText'), apiDot: $('#apiDot'),
 	apiText: $('#apiText'), terminal: $('#terminalLog'),
-	search: $('#workspaceSearch'), modelSelect: $('#modelSelect'), lab: $('#labMessages'),
+	search: $('#workspaceSearch'), modelSelect: $('#modelSelect'), copilotModelSelect: $('#copilotModelSelect'),
+	copilotModelStatus: $('#copilotModelStatus'), loadCopilotModel: $('#loadCopilotModel'), lab: $('#labMessages'),
 	labInput: $('#labInput'), copilotInput: $('#copilotInput'), copilotMessages: $('#copilotMessages'),
 	modal: $('#settingsDialog'), toastRoot: $('#toasts'),
 };
@@ -215,6 +216,7 @@ function log(message) {
 function setBusy(busy, text = '') {
 	state.busy = busy;
 	ui.status.textContent = text || (busy ? 'Working…' : 'Ready');
+	renderCopilotModelSelect();
 }
 function headers(json = false) {
 	const h = {};
@@ -233,20 +235,22 @@ async function refreshServerStatus() {
 		if (!health.ok) throw new Error(`health HTTP ${health.status}`);
 		const healthData = await health.json();
 		if (!models.ok) throw new Error(`models HTTP ${models.status}`);
-		const body = await models.json();
-		state.models = Array.isArray(body.data) ? body.data : [];
-		if (!state.selectedModel && state.models.length) state.selectedModel = state.models[0].id || state.models[0].model || '';
-		ui.apiDot.className = 'dot online';
-		ui.apiText.textContent = state.models.length ? `Server online · ${state.models.length} model(s)` : 'Server online · no models listed';
-		$('#apiDetails').textContent = `GET /health: ${healthData.status || 'ok'}\nGET /v1/models: ${state.models.length} model(s)`;
-		renderModelSelect(); renderModelSummary(healthData);
-		log(`Connected to API; ${state.models.length} model(s) reported.`);
-	} catch (error) {
-		ui.apiDot.className = 'dot offline'; ui.apiText.textContent = `Server unavailable · ${error.message}`;
-		$('#apiDetails').textContent = `Server unavailable: ${error.message}`;
-		renderModelSelect(); renderModelSummary(null); log(`API unavailable: ${error.message}`);
+			const body = await models.json();
+			state.models = Array.isArray(body.data) ? body.data : [];
+			if (!state.selectedModel && state.models.length) state.selectedModel = state.models[0].id || state.models[0].model || '';
+			await refreshRouterModels();
+			ui.apiDot.className = 'dot online';
+			ui.apiText.textContent = state.models.length ? `Server online · ${state.models.length} model(s)` : 'Server online · no models listed';
+			$('#apiDetails').textContent = `GET /health: ${healthData.status || 'ok'}\nGET /v1/models: ${state.models.length} model(s)`;
+			renderModelSelect(); renderCopilotModelSelect(); renderModelSummary(healthData);
+			log(`Connected to API; ${state.models.length} model(s) reported.`);
+		} catch (error) {
+			state.models = []; state.routerModels = [];
+			ui.apiDot.className = 'dot offline'; ui.apiText.textContent = `Server unavailable · ${error.message}`;
+			$('#apiDetails').textContent = `Server unavailable: ${error.message}`;
+			renderModelSelect(); renderCopilotModelSelect(); renderModelSummary(null); log(`API unavailable: ${error.message}`);
+		}
 	}
-}
 function renderModelSelect() {
 	ui.modelSelect.replaceChildren();
 	if (!state.models.length) {
@@ -258,11 +262,75 @@ function renderModelSelect() {
 		const id = model.id || model.model;
 		const option = el('option', { value: id }, id);
 		if (id === state.selectedModel) option.selected = true;
-		ui.modelSelect.append(option);
+			ui.modelSelect.append(option);
+		}
 	}
-}
-function renderModelSummary(health) {
-	const panel = $('#apiSummary'); panel.replaceChildren();
+	function routerStatus(model) {
+		return typeof model?.status === 'string' ? model.status : model?.status?.value || '';
+	}
+	function renderCopilotModelSelect() {
+		if (!ui.copilotModelSelect) return;
+		const entries = new Map();
+		for (const model of state.routerModels) {
+			const id = model.id || model.model;
+			if (id) entries.set(id, model);
+		}
+		for (const model of state.models) {
+			const id = model.id || model.model;
+			if (id && !entries.has(id)) entries.set(id, { ...model, status: { value: 'loaded' } });
+		}
+		const rank = { loaded: 0, sleeping: 1, downloaded: 2, unloaded: 2, loading: 3, failed: 4, downloading: 5, incomplete: 6, download_failed: 7 };
+		const options = [...entries.values()].sort((a, b) => (rank[routerStatus(a)] ?? 8) - (rank[routerStatus(b)] ?? 8));
+		ui.copilotModelSelect.replaceChildren();
+		if (!options.length) {
+			ui.copilotModelSelect.append(el('option', { value: '' }, 'No models reported by server'));
+			state.selectedCopilotModel = '';
+		} else {
+			const usable = options.filter(model => !['downloading', 'incomplete', 'download_failed'].includes(routerStatus(model)));
+			const current = options.some(model => (model.id || model.model) === state.selectedCopilotModel)
+				? state.selectedCopilotModel
+				: (usable.find(model => (model.id || model.model) === state.selectedModel)?.id || usable[0]?.id || '');
+			state.selectedCopilotModel = current;
+			for (const model of options) {
+				const id = model.id || model.model;
+				const status = routerStatus(model);
+				const label = status ? ` · ${status.replaceAll('_', ' ')}` : '';
+				const option = el('option', { value: id }, `${id}${label}`);
+				option.disabled = ['downloading', 'incomplete', 'download_failed'].includes(status);
+				if (id === current) option.selected = true;
+				ui.copilotModelSelect.append(option);
+			}
+		}
+		const selected = options.find(model => (model.id || model.model) === state.selectedCopilotModel);
+		const status = routerStatus(selected);
+		const loaded = state.models.some(model => (model.id || model.model) === state.selectedCopilotModel) || ['loaded', 'sleeping'].includes(status);
+		const routerModel = state.routerModels.find(model => (model.id || model.model) === state.selectedCopilotModel);
+		ui.loadCopilotModel.hidden = !routerModel;
+		ui.loadCopilotModel.disabled = state.busy || !routerModel || loaded || ['loading', 'downloading', 'incomplete', 'download_failed'].includes(status);
+		ui.loadCopilotModel.textContent = loaded ? 'Model ready' : status === 'loading' ? 'Loading model…' : 'Load selected model';
+		ui.copilotModelStatus.textContent = !state.selectedCopilotModel
+			? 'No model is available. Start llama-server or download one in Router mode.'
+			: loaded ? `Copilot will use ${state.selectedCopilotModel} on the local inference server.`
+			: status === 'downloading' ? `${state.selectedCopilotModel} is still downloading.`
+			: status === 'incomplete' ? `${state.selectedCopilotModel} has an incomplete download; resume it from Router mode.`
+			: `${state.selectedCopilotModel} is available in the Router cache and must be loaded before inference.`;
+	}
+	async function refreshRouterModels() {
+		try {
+			const response = await fetch('/models', { headers: headers() });
+			if (!response.ok) { state.routerModels = []; renderCopilotModelSelect(); return false; }
+			const body = await response.json();
+			state.routerModels = Array.isArray(body.data) ? body.data : [];
+			renderCopilotModelSelect();
+			return true;
+		} catch {
+			state.routerModels = [];
+			renderCopilotModelSelect();
+			return false;
+		}
+	}
+	function renderModelSummary(health) {
+		const panel = $('#apiSummary'); panel.replaceChildren();
 	panel.append(el('div', { class: 'info-line' }, `Liveness: ${health?.status || 'Unavailable'}`));
 	panel.append(el('div', { class: 'info-line' }, `Models: ${state.models.length}`));
 	for (const model of state.models) {
@@ -619,9 +687,9 @@ function renderSearchResults() {
 	if (!count) root.append(el('p', { class: 'muted' }, 'No matches in opened files.'));
 }
 
-async function chatRequest(messages, onDelta = null) {
+async function chatRequest(messages, onDelta = null, modelOverride = '') {
 	if (!state.models.length) throw new Error('The server reports no available models. Check the API Server panel.');
-	const model = state.selectedModel || state.models[0].id || state.models[0].model;
+	const model = modelOverride || state.selectedModel || state.models[0].id || state.models[0].model;
 	const response = await fetch('/v1/chat/completions', {
 		method: 'POST', headers: headers(true),
 		body: JSON.stringify({ model, messages, stream: !!onDelta, temperature: 0.7 })
@@ -645,6 +713,89 @@ async function chatRequest(messages, onDelta = null) {
 	}
 	return result;
 }
+
+async function openRouterModelWatcher(modelId) {
+	const controller = new AbortController();
+	let closed = false, timedOut = false;
+	const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10 * 60 * 1000);
+	let response;
+	try { response = await fetch('/models/sse', { headers: headers(), signal: controller.signal }); }
+	catch (error) { clearTimeout(timeout); if (timedOut) throw new Error('Timed out connecting to Router model events.'); throw error; }
+	if (!response.ok || !response.body) { clearTimeout(timeout); throw new Error(`Router model event stream unavailable (HTTP ${response.status}).`); }
+	const reader = response.body.getReader();
+	const wait = (async () => {
+		const decoder = new TextDecoder(); let buffer = '';
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) throw new Error('Router model event stream closed before loading finished.');
+			buffer += decoder.decode(value, { stream: true });
+			const records = buffer.split(/\r?\n\r?\n/); buffer = records.pop() || '';
+			for (const record of records) {
+				const data = record.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('\n');
+				if (!data) continue;
+				let event;
+				try { event = JSON.parse(data); } catch { continue; }
+				if (event.model !== modelId) continue;
+				const status = event.data?.status;
+				if (['loaded', 'sleeping'].includes(status)) return status;
+				if (['failed', 'download_failed'].includes(status)) throw new Error(`Router failed to load ${modelId}.`);
+				if (event.event === 'model_remove') throw new Error(`${modelId} was removed from the Router cache.`);
+			}
+		}
+	})().catch(error => {
+		if (closed) return null;
+		if (timedOut) throw new Error(`Timed out waiting for ${modelId} to load.`);
+		throw error;
+	});
+	return {
+		wait,
+		close: () => { closed = true; clearTimeout(timeout); controller.abort(); void reader.cancel().catch(() => {}); }
+	};
+}
+
+async function ensureCopilotModelLoaded(modelId) {
+	if (!modelId) throw new Error('Select a model for Copilot first.');
+	let routerModel = state.routerModels.find(model => (model.id || model.model) === modelId);
+	const alreadyLoaded = () => state.models.some(model => (model.id || model.model) === modelId) || ['loaded', 'sleeping'].includes(routerStatus(routerModel));
+	if (alreadyLoaded()) return;
+	if (!routerModel) {
+		if (!await refreshRouterModels()) throw new Error('This model is not available from the local server. Router mode is required to load cached models.');
+		routerModel = state.routerModels.find(model => (model.id || model.model) === modelId);
+	}
+	if (!routerModel) throw new Error(`${modelId} is not listed in the Router cache. Download it from Hugging Face first.`);
+	let status = routerStatus(routerModel);
+	if (status === 'downloading' || status === 'incomplete' || status === 'download_failed') throw new Error(`${modelId} is not ready. Finish or resume its Hugging Face download first.`);
+	const watcher = await openRouterModelWatcher(modelId);
+	try {
+		await refreshRouterModels();
+		routerModel = state.routerModels.find(model => (model.id || model.model) === modelId);
+		status = routerStatus(routerModel);
+		if (alreadyLoaded()) return;
+		if (!routerModel) throw new Error(`${modelId} is no longer listed in the Router cache.`);
+		if (status !== 'loading') {
+			const response = await fetch('/models/load', { method: 'POST', headers: headers(true), body: JSON.stringify({ model: modelId }) });
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok || body.success === false) throw new Error(body.error?.message || `Load request failed (HTTP ${response.status}).`);
+		}
+		ui.status.textContent = `Loading ${modelId} on the local inference server…`;
+		await watcher.wait;
+		await refreshServerStatus();
+		if (!state.models.some(model => (model.id || model.model) === modelId) && !['loaded', 'sleeping'].includes(routerStatus(state.routerModels.find(model => (model.id || model.model) === modelId)))) {
+			throw new Error(`${modelId} did not become available through /v1/models.`);
+		}
+	} finally { watcher.close(); }
+}
+
+async function loadCopilotModel() {
+	if (state.busy) return;
+	const modelId = state.selectedCopilotModel;
+	if (!modelId) { toast('Select a model for Copilot first.', 'warn'); return; }
+	setBusy(true, `Loading ${modelId}…`);
+	try { await ensureCopilotModelLoaded(modelId); toast(`${modelId} is ready for Copilot.`, 'success'); }
+	catch (error) { toast(error.message, 'error'); log(`Copilot model load failed: ${error.message}`); }
+	finally { setBusy(false); }
+}
+
 function renderMessages(root, list) {
 	root.replaceChildren();
 	for (const message of list) root.append(el('div', { class: `message ${message.role}` }, [el('b', {}, message.role === 'user' ? 'You' : 'Forge'), el('div', {}, message.content)]));
@@ -677,9 +828,11 @@ async function sendCopilot(promptText) {
 	ui.copilotMessages.append(userRow);
 	const output = el('div', { class: 'message assistant' }, [el('b', {}, 'Forge Copilot'), el('div', { class: 'copilot-output' }, 'Working…')]);
 	ui.copilotMessages.append(output); const content = output.querySelector('.copilot-output');
-	setBusy(true, 'Copilot is using the configured inference server…');
-	try {
-		const answer = await chatRequest(messages);
+		const modelId = state.selectedCopilotModel || state.selectedModel;
+		setBusy(true, `Copilot is preparing ${modelId || 'the selected model'}…`);
+		try {
+			await ensureCopilotModelLoaded(modelId);
+			const answer = await chatRequest(messages, null, modelId);
 		content.textContent = answer;
 		const match = answer.match(/```(?:[a-zA-Z0-9_+-]+)?\n([\s\S]*?)```/);
 		if (match && doc && !doc.binary) {
@@ -695,27 +848,50 @@ async function downloadHfModel() {
 	const repo = $('#hfRepo').value.trim(); if (!repo) { toast('Enter a Hugging Face model/repository ID.', 'warn'); return; }
 	try {
 		setBusy(true, `Requesting download for ${repo}…`);
+		if (!await refreshRouterModels()) throw new Error('Hugging Face downloads require a Router-mode llama-server.');
+		await watchModelProgress();
 		const response = await fetch('/models', { method: 'POST', headers: headers(true), body: JSON.stringify({ model: repo, sidecars: [] }) });
-		if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`);
+		const body = await response.json().catch(() => ({}));
+		if (!response.ok || body.success === false) throw new Error(body.error?.message || `HTTP ${response.status}: model download was rejected`);
+		state.selectedCopilotModel = repo;
+		await refreshRouterModels();
+		renderCopilotModelSelect();
 		toast(`Download request accepted for ${repo}. Check server events for progress.`, 'success');
 		log(`Model download submitted: ${repo}`);
-		watchModelProgress();
 	} catch (error) { toast(`Download request failed: ${error.message}`, 'error'); log(error.message); }
 	finally { setBusy(false); }
 }
-async function watchModelProgress() {
-	try {
-		const response = await fetch('/models/sse', { headers: headers() });
-		if (!response.ok || !response.body) throw new Error(`SSE HTTP ${response.status}`);
-		const reader = response.body.getReader(), td = new TextDecoder(); let buffer = '';
-		for (;;) {
-			const { value, done } = await reader.read(); if (done) break;
-			buffer += td.decode(value, { stream: true });
-			const chunks = buffer.split('\n\n'); buffer = chunks.pop() || '';
-			for (const chunk of chunks) if (chunk.trim()) { log(`Model event: ${chunk.replace(/\s+/g, ' ').slice(0, 300)}`); if (/download_(finished|failed)/.test(chunk)) { await refreshServerStatus(); if (/download_failed/.test(chunk)) toast('Model download failed; see activity log.', 'error'); else toast('Model download finished; refreshed model list.', 'success'); } }
-		}
-		await refreshServerStatus();
-	} catch (error) { log(`Model progress stream unavailable: ${error.message}`); }
+function watchModelProgress() {
+	if (state.modelProgressReady) return state.modelProgressReady;
+	state.watchingModelProgress = true;
+	let readyResolve, readyReject, readySettled = false;
+	state.modelProgressReady = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+	void (async () => {
+		try {
+			const response = await fetch('/models/sse', { headers: headers() });
+			if (!response.ok || !response.body) throw new Error(`SSE HTTP ${response.status}`);
+			readyResolve(); readySettled = true;
+			const reader = response.body.getReader(), td = new TextDecoder(); let buffer = '';
+			for (;;) {
+				const { value, done } = await reader.read(); if (done) break;
+				buffer += td.decode(value, { stream: true });
+				const chunks = buffer.split(/\r?\n\r?\n/); buffer = chunks.pop() || '';
+				for (const chunk of chunks) if (chunk.trim()) {
+					log(`Model event: ${chunk.replace(/\s+/g, ' ').slice(0, 300)}`);
+					if (/download_(finished|failed)|models_reload/.test(chunk)) {
+						await refreshServerStatus();
+						if (/download_failed/.test(chunk)) toast('Model download failed; see activity log.', 'error');
+						else if (/download_finished/.test(chunk)) toast('Model download finished; refreshed model list.', 'success');
+					}
+				}
+			}
+			await refreshServerStatus();
+		} catch (error) {
+			if (!readySettled) readyReject(error);
+			log(`Model progress stream unavailable: ${error.message}`);
+		} finally { state.watchingModelProgress = false; state.modelProgressReady = null; }
+	})();
+	return state.modelProgressReady;
 }
 
 function prepareQuantizeCommand() {
@@ -757,9 +933,11 @@ document.addEventListener('click', async event => {
 		case 'run': explainUnsupported('Run', 'A browser page cannot execute arbitrary source code or shell commands. Use a trusted local terminal.'); break;
 		case 'copilot': renderPanel('copilot'); break;
 		case 'settings': ui.modal.showModal(); break;
-		case 'settings-close': ui.modal.close(); break;
-		case 'refresh-api': await refreshServerStatus(); break;
-		case 'open-hex': renderPanel('hex'); break;
+			case 'settings-close': ui.modal.close(); break;
+			case 'refresh-api': await refreshServerStatus(); break;
+			case 'refresh-models': await refreshServerStatus(); toast('Model list refreshed.', 'success'); break;
+			case 'load-copilot-model': await loadCopilotModel(); break;
+			case 'open-hex': renderPanel('hex'); break;
 		case 'open-gguf': renderPanel('inspect'); break;
 		case 'choose-model': $('#modelFileInput').click(); break;
 		case 'save-metadata': await saveMetadataCopy(); break;
@@ -792,6 +970,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', event => {
 	if (event.target === ui.modelSelect) state.selectedModel = ui.modelSelect.value;
+	if (event.target === ui.copilotModelSelect) { state.selectedCopilotModel = ui.copilotModelSelect.value; renderCopilotModelSelect(); }
 	if (event.target.id === 'formatOnSave') state.formatOnSave = event.target.checked;
 });
 $('#fileFallback').addEventListener('change', event => { const files = [...event.target.files]; void openPickedFiles(files); event.target.value = ''; });
